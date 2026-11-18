@@ -1,10 +1,5 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { CustomCursor } from "@/components/custom-cursor";
-import { Intro } from "@/components/intro";
-import { introBootstrap } from "@/components/intro-bootstrap";
-import { Navbar } from "@/components/navbar";
-import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 import "./portfolio.css";
 
@@ -24,6 +19,13 @@ const instrumentSerif = localFont({
   variable: "--font-instrument-serif",
 });
 
+const generalSans = localFont({
+  src: "../public/fonts/GeneralSans-Medium.woff2",
+  weight: "500",
+  display: "swap",
+  variable: "--font-general-sans",
+});
+
 export const metadata: Metadata = {
   title: {
     default: "Soumen Mandal — Video Editor & Motion Designer",
@@ -35,24 +37,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: introBootstrap }} />
-      </head>
+    <html lang="en" className="h-full antialiased">
       <body
-        className={`min-h-full flex flex-col ${clashDisplay.variable} ${instrumentSerif.variable}`}
+        className={`min-h-full flex flex-col ${clashDisplay.variable} ${instrumentSerif.variable} ${generalSans.variable}`}
       >
-        <Intro>
-          <a className="skip-link" href="#main">
-            Skip to content
-          </a>
-          <Navbar />
-          <main id="main" className="grow" tabIndex={-1}>
-            {children}
-          </main>
-          <SiteFooter />
-        </Intro>
-        <CustomCursor />
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        <main id="main" className="grow" tabIndex={-1}>
+          {children}
+        </main>
       </body>
     </html>
   );

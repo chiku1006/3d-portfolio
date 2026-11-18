@@ -1,47 +1,49 @@
 import {
-  featuredShowreel,
   motionGalleryProjects,
   projectCategories,
   projects,
-  type GalleryMedia,
 } from "@/src/data/projects";
-import { readMp4Duration } from "@/src/data/mp4-duration";
-import { hasPublicAsset } from "@/src/data/public-assets";
+import {
+  hasPublicAsset,
+  withMediaAvailability,
+} from "@/src/data/public-assets";
+import Link from "next/link";
 import { MotionGallery } from "./MotionGallery";
 import { ProjectCard } from "./ProjectCard";
 import "./work.css";
 
-function withAvailability(item: GalleryMedia) {
-  return {
-    ...item,
-    videoAvailable: hasPublicAsset(item.videoSrc),
-    posterAvailable: hasPublicAsset(item.posterSrc),
-  };
-}
-
 export function WorkSection() {
   return (
-    <section id="work" aria-labelledby="work-title" className="work-section">
+    <section
+      id="work"
+      aria-labelledby="work-title"
+      className="work-section one-page-section"
+      tabIndex={-1}
+    >
       <div className="work-container">
         <header className="work-sectionHeader">
-          <div data-page-enter>
-            <p className="work-eyebrow">SELECTED WORK</p>
-            <h1 id="work-title" className="work-title">
-              My Work<span>.</span>
-            </h1>
+          <div data-scroll-reveal>
+            <p className="work-eyebrow editorial-label">Project index</p>
+            <h2 id="work-title" className="work-title">
+              Work in <em>motion.</em>
+            </h2>
           </div>
-          <p className="work-intro" data-page-enter>
-            Video editing &amp; motion design.
-            <br />A closer look at the work.
-          </p>
+          <nav
+            className="work-index"
+            aria-label="Jump to work category"
+            data-scroll-reveal
+          >
+            <Link href="#category-0" data-magnetic="">
+              Motion Graphics <span aria-hidden="true">↓</span>
+            </Link>
+            <Link href="#category-1" data-magnetic="">
+              Short-Form Editing <span aria-hidden="true">↓</span>
+            </Link>
+          </nav>
         </header>
         <div className="work-categories">
           <MotionGallery
-            showreel={{
-              ...withAvailability(featuredShowreel),
-              duration: readMp4Duration(featuredShowreel.videoSrc),
-            }}
-            projects={motionGalleryProjects.map(withAvailability)}
+            projects={motionGalleryProjects.map(withMediaAvailability)}
           />
           {projectCategories.map((category, index) => {
             if (category === "Motion Graphics") return null;
@@ -55,7 +57,7 @@ export function WorkSection() {
                   <span className="work-categoryIndex" aria-hidden="true">
                     0{index + 1}
                   </span>
-                  <h2 id={`category-${index}`}>{category}</h2>
+                  <h3 id={`category-${index}`}>{category}</h3>
                   <span className="work-categoryCount">
                     {String(entries.length).padStart(2, "0")}{" "}
                     {entries.length === 1 ? "PROJECT" : "PROJECTS"}

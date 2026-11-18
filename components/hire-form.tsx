@@ -45,8 +45,15 @@ export function HireForm() {
           <input name="email" type="email" autoComplete="email" required />
         </label>
         <label>
-          <span className="editorial-label">Project type</span>
-          <select name="projectType" defaultValue="" required>
+          <span id="hire-project-type" className="editorial-label">
+            Project type
+          </span>
+          <select
+            name="projectType"
+            aria-labelledby="hire-project-type"
+            defaultValue=""
+            required
+          >
             <option value="" disabled>
               Select a project type
             </option>
@@ -66,7 +73,8 @@ export function HireForm() {
       </div>
       <div className="hire-form-actions">
         <button
-          className="hero-button button-primary"
+          className="studio-button studio-button-primary"
+          data-magnetic=""
           type="submit"
           aria-describedby="hire-email-note"
         >

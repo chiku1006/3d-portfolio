@@ -2,7 +2,6 @@ import Link from "next/link";
 import { MotionGallery } from "@/src/components/MotionGallery";
 import { homeFeaturedProjects } from "@/src/data/projects";
 import { hasPublicAsset } from "@/src/data/public-assets";
-import { PageMotion } from "./page-motion";
 import "./featured-projects.css";
 
 export function FeaturedProjects() {
@@ -22,32 +21,26 @@ export function FeaturedProjects() {
       className="featured-work"
       aria-labelledby="featured-title"
     >
-      <PageMotion className="featured-inner">
+      <div className="featured-inner">
         <header className="featured-header">
           <div>
-            <p className="editorial-label featured-eyebrow" data-scroll-reveal>
-              Selected Work
-            </p>
-            <h2
-              id="featured-title"
-              className="featured-title"
-              data-scroll-reveal
-            >
+            <p className="editorial-label featured-eyebrow">Selected Work</p>
+            <h2 id="featured-title" className="featured-title">
               Featured <em>projects</em>
             </h2>
-            <p className="featured-description" data-scroll-reveal>
+            <p className="featured-description">
               A selection of video edits and motion projects, from concept to
               final cut.
             </p>
           </div>
-          <div data-scroll-reveal>
-            <Link className="featured-all" href="/work">
+          <div>
+            <Link className="featured-all" href="#work" data-magnetic="">
               View all work <span aria-hidden="true">→</span>
             </Link>
           </div>
         </header>
-        <MotionGallery projects={featured} />
-      </PageMotion>
+        <MotionGallery variant="featured" projects={featured} />
+      </div>
     </section>
   );
 }

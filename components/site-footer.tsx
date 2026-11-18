@@ -1,21 +1,24 @@
 import { contact } from "@/src/data/site";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { FooterSocials } from "./footer-socials";
-
-const marqueeText = "CRAFTING VISUALS THAT CONNECT •";
 
 export function SiteFooter() {
   return (
     <footer id="footer" className="site-footer">
       <div className="footer-frame">
-        <div className="footer-marquee" aria-hidden="true">
-          <div className="footer-marquee-track">
-            {[0, 1].map((copy) => (
-              <div key={copy} className="footer-marquee-group">
-                <span>{marqueeText}</span>
-                <span>{marqueeText}</span>
-              </div>
-            ))}
-          </div>
+        <div className="studio-footer-call">
+          <h2>
+            Let&apos;s make it <em>move.</em>
+          </h2>
+          <Link
+            href="#hire"
+            className="studio-footer-arrow"
+            aria-label="Start a project"
+            data-magnetic=""
+          >
+            <ArrowUpRight aria-hidden="true" />
+          </Link>
         </div>
         <div className="footer-columns">
           <div>

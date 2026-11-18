@@ -1,0 +1,111 @@
+.one-page-section:focus {
+  outline: none;
+}
+
+.cinematic-stage {
+  position: relative;
+}
+
+.cinematic-stage[data-cinematic-desktop] {
+  display: grid;
+  grid-template-areas: "screen";
+  min-height: 100svh;
+  overflow: clip;
+  isolation: isolate;
+  background: var(--background);
+}
+
+[data-cinematic-desktop] > :is(.studio-hero, .featured-work) {
+  grid-area: screen;
+  min-width: 0;
+  min-height: 100svh;
+}
+
+[data-cinematic-desktop] > .studio-hero {
+  z-index: 2;
+  padding-block: clamp(108px, 13svh, 155px) 25px;
+  isolation: auto;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+}
+
+[data-cinematic-desktop] .studio-hero-grid {
+  perspective: 1260px;
+}
+
+[data-cinematic-desktop]
+  :is(.studio-hero-copy, .studio-hero-visual, .studio-hero-meta) {
+  pointer-events: auto;
+}
+
+[data-cinematic-desktop]
+  .studio-hero
+  .motion-gallery-hero
+  .motion-tile-featured {
+  aspect-ratio: 16 / 9;
+}
+
+[data-cinematic-desktop] > .featured-work {
+  z-index: 1;
+  display: grid;
+  align-items: center;
+  padding: 106px var(--studio-gutter) 28px;
+  border: 0;
+  background: transparent;
+}
+
+[data-cinematic-desktop] .featured-inner {
+  width: min(100%, 1240px);
+}
+
+[data-cinematic-desktop] .featured-header {
+  margin-bottom: clamp(14px, 2.8svh, 30px);
+}
+
+.cinematic-stage[data-cinematic-desktop] .featured-work .featured-title {
+  font-size: clamp(42px, min(6vw, 8svh), 84px);
+}
+
+[data-cinematic-desktop] .featured-grid > .motion-row:nth-child(n) {
+  height: clamp(140px, 25svh, 280px);
+  aspect-ratio: auto;
+  perspective: 1320px;
+}
+
+[data-cinematic-active] .motion-gallery .motion-card[data-depth] {
+  transform: none;
+}
+
+[data-cinematic-active]
+  .motion-gallery
+  .motion-card
+  :is(.motion-poster, .motion-preview) {
+  transform: none;
+}
+
+.cinematic-experience + .work-page {
+  padding-top: 0;
+}
+
+.work-page .one-page-section {
+  padding-block-start: clamp(40px, 6vw, 88px);
+  border-top: 1px solid var(--stroke);
+}
+
+.editorial-page.one-page-section {
+  padding-block-start: clamp(54px, 8vw, 120px);
+  border-top: 1px solid var(--stroke);
+}
+
+@media (max-width: 767px) {
+  .cinematic-stage .featured-grid > .motion-row:nth-child(n) {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    aspect-ratio: auto;
+  }
+
+  .cinematic-stage .featured-grid .motion-cell {
+    aspect-ratio: 16 / 10;
+  }
+}

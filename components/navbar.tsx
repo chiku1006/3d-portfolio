@@ -2,17 +2,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import localFont from "next/font/local";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useIntroReady } from "./intro";
-
-const generalSans = localFont({
-  src: "../public/fonts/GeneralSans-Medium.woff2",
-  weight: "500",
-  style: "normal",
-  display: "swap",
-  variable: "--font-general-sans",
-});
 const satoshi = localFont({
   src: "../public/fonts/Satoshi-Bold.woff2",
   weight: "700",
@@ -21,36 +10,61 @@ const satoshi = localFont({
   variable: "--font-satoshi",
 });
 const links = [
-  { href: "/", label: "Home" },
-  { href: "/work", label: "My Work" },
-  { href: "/info", label: "Info" },
-  { href: "/hire", label: "Hire Me ↗" },
+  { href: "#home", label: "Home" },
+  { href: "#work", label: "My Work" },
+  { href: "#info", label: "Info" },
+  { href: "#hire", label: "Hire Me ↗" },
 ];
 export function Navbar() {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-  const introReady = useIntroReady();
+  const [active, setActive] = useState("#home");
   const header = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
-    if (!introReady) return;
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
       gsap.fromTo(
         header.current,
-        { y: 29, opacity: 0, filter: "blur(8px)" },
+        { y: -12, opacity: 0 },
         {
           y: 0,
           opacity: 1,
-          filter: "blur(0px)",
-          duration: 0.64,
+          duration: 0.45,
           ease: "power3.out",
-          clearProps: "opacity,transform,filter",
+          clearProps: "opacity,transform",
         },
       );
     });
     return () => media.revert();
-  }, [introReady]);
+  }, []);
+  useEffect(() => {
+    const sections = links.map(({ href }) =>
+      document.getElementById(href.slice(1)),
+    );
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const readingLine = Math.min(180, window.innerHeight * 0.25);
+      const index = sections.findLastIndex(
+        (section) =>
+          section && section.getBoundingClientRect().top <= readingLine,
+      );
+      setActive(links[Math.max(0, index)].href);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    window.addEventListener("hashchange", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("hashchange", schedule);
+    };
+  }, []);
   useEffect(() => {
     const escape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && open) {
@@ -78,29 +92,28 @@ export function Navbar() {
     };
   }, [open]);
   return (
-    <header
-      className={`site-header ${generalSans.variable} ${satoshi.variable}`}
-      ref={header}
-    >
+    <header className={`site-header ${satoshi.variable}`} ref={header}>
       <nav aria-label="Main navigation" className="nav-shell">
-        <Link
-          href="/"
+        <a
+          href="#home"
           className="logo"
+          data-magnetic=""
           aria-label="Soumen Mandal — Home"
           onClick={() => setOpen(false)}
         >
           sm.
-        </Link>
+        </a>
         <div className="desktop-links">
           {links.map((link) => (
-            <Link
+            <a
               key={link.href}
               href={link.href}
-              className={link.href === "/hire" ? "nav-cta" : "nav-link"}
-              aria-current={pathname === link.href ? "page" : undefined}
+              className={link.href === "#hire" ? "nav-cta" : "nav-link"}
+              aria-current={active === link.href ? "location" : undefined}
+              data-magnetic=""
             >
               {link.label}
-            </Link>
+            </a>
           ))}
         </div>
         <button
@@ -129,14 +142,14 @@ export function Navbar() {
         hidden={!open}
       >
         {links.map((link) => (
-          <Link
+          <a
             key={link.href}
             href={link.href}
-            aria-current={pathname === link.href ? "page" : undefined}
+            aria-current={active === link.href ? "location" : undefined}
             onClick={() => setOpen(false)}
           >
             {link.label}
-          </Link>
+          </a>
         ))}
       </nav>
     </header>

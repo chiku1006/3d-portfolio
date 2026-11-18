@@ -25,7 +25,7 @@ export type GalleryItem = GalleryMedia & {
   duration?: number;
 };
 
-function MotionDialog({
+export function MotionDialog({
   item,
   onClose,
 }: {
@@ -83,13 +83,122 @@ function MotionDialog({
   );
 }
 
+function MotionCard({
+  id,
+  item,
+  sizes,
+  featured = false,
+  reveal = true,
+  onPreview,
+  onStop,
+  onOpen,
+  onPlaying,
+  onError,
+}: {
+  id: string;
+  item: GalleryItem;
+  sizes?: string;
+  featured?: boolean;
+  reveal?: boolean;
+  onPreview: (event: PointerEvent<HTMLButtonElement>, src: string) => void;
+  onStop: () => void;
+  onOpen: (button: HTMLButtonElement, item: GalleryItem) => void;
+  onPlaying: (video: HTMLVideoElement) => void;
+  onError: (video: HTMLVideoElement) => void;
+}) {
+  return (
+    <article
+      id={id}
+      className={featured ? "motion-tile motion-tile-featured" : "motion-tile"}
+      data-scroll-reveal={reveal || undefined}
+    >
+      <button
+        type="button"
+        className="motion-card"
+        data-no-poster={!item.posterAvailable || undefined}
+        data-depth=""
+        data-cursor={item.videoAvailable ? "PLAY" : undefined}
+        aria-label={
+          item.videoAvailable
+            ? `Play ${item.title}`
+            : `${item.title} — video unavailable`
+        }
+        aria-haspopup={item.videoAvailable ? "dialog" : undefined}
+        disabled={!item.videoAvailable}
+        onPointerEnter={(event) => onPreview(event, item.videoSrc)}
+        onPointerLeave={onStop}
+        onPointerCancel={onStop}
+        onClick={(event) => onOpen(event.currentTarget, item)}
+      >
+        {item.posterAvailable && (
+          <Image
+            className="motion-poster"
+            src={item.posterSrc}
+            alt={item.posterAlt}
+            sizes={
+              sizes ??
+              (featured
+                ? "(max-width: 640px) 100vw, 1280px"
+                : "(max-width: 640px) 100vw, 55vw")
+            }
+            fill
+            preload={featured}
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        )}
+        {item.videoAvailable && (
+          <video
+            className="motion-preview"
+            preload="none"
+            muted
+            loop
+            playsInline
+            aria-hidden="true"
+            onPlaying={(event) => onPlaying(event.currentTarget)}
+            onError={(event) => onError(event.currentTarget)}
+          />
+        )}
+        {featured && <span className="motion-badge">★ FEATURED SHOWREEL</span>}
+        {item.videoAvailable && (
+          <span className="motion-play" aria-hidden="true">
+            <Play
+              size={featured ? 24 : 17}
+              fill="currentColor"
+              strokeWidth={0}
+            />
+          </span>
+        )}
+        <span className="motion-caption">
+          <span>
+            <span className="motion-label">
+              {featured ? "Showreel" : "Motion Graphics"}
+            </span>
+            <span className="motion-title">{item.title}</span>
+          </span>
+          {featured && item.duration !== undefined && (
+            <span className="motion-duration">{formatTime(item.duration)}</span>
+          )}
+          {!item.videoAvailable && (
+            <span className="motion-duration">Unavailable</span>
+          )}
+        </span>
+      </button>
+    </article>
+  );
+}
+
 export function MotionGallery({
   showreel,
   projects,
+  variant,
 }: {
   showreel?: GalleryItem;
   projects: readonly GalleryItem[];
+  variant?: "hero" | "portrait" | "featured";
 }) {
+  const gallery = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<GalleryItem | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const modalOpen = useRef(false);
@@ -115,6 +224,8 @@ export function MotionGallery({
 
   useEffect(() => {
     const preference = window.matchMedia(hoverQuery);
+    const stage = gallery.current?.closest("[data-cinematic-stage]");
+    stage?.addEventListener("cinematic-preview-reset", stopPreview);
     const onPreferenceChange = () => {
       if (!preference.matches) stopPreview();
     };
@@ -124,6 +235,7 @@ export function MotionGallery({
     preference.addEventListener("change", onPreferenceChange);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      stage?.removeEventListener("cinematic-preview-reset", stopPreview);
       preference.removeEventListener("change", onPreferenceChange);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       modalOpen.current = false;
@@ -134,6 +246,7 @@ export function MotionGallery({
   function startPreview(event: PointerEvent<HTMLButtonElement>, src: string) {
     if (
       modalOpen.current ||
+      event.currentTarget.closest("[data-cinematic-active]") ||
       event.pointerType !== "mouse" ||
       !window.matchMedia(hoverQuery).matches
     )
@@ -154,111 +267,49 @@ export function MotionGallery({
     previewTimer.current = timer;
   }
 
-  function card(item: GalleryItem, featured = false) {
-    return (
-      <article
-        id={showreel ? item.id : `featured-${item.id}`}
-        className={
-          featured ? "motion-tile motion-tile-featured" : "motion-tile"
-        }
-        data-scroll-reveal
-      >
-        <button
-          type="button"
-          className="motion-card"
-          data-no-poster={!item.posterAvailable || undefined}
-          aria-label={
-            item.videoAvailable
-              ? `Play ${item.title}`
-              : `${item.title} — video unavailable`
-          }
-          aria-haspopup={item.videoAvailable ? "dialog" : undefined}
-          disabled={!item.videoAvailable}
-          onPointerEnter={(event) => startPreview(event, item.videoSrc)}
-          onPointerLeave={stopPreview}
-          onPointerCancel={stopPreview}
-          onClick={(event) => {
-            opener.current = event.currentTarget;
-            modalOpen.current = true;
-            stopPreview();
-            setGalleryPlaying(true);
-            setSelected(item);
-          }}
-        >
-          {item.posterAvailable && (
-            <Image
-              className="motion-poster"
-              src={item.posterSrc}
-              alt={item.posterAlt}
-              sizes={
-                featured
-                  ? "(max-width: 640px) 100vw, 1280px"
-                  : "(max-width: 640px) 100vw, 55vw"
-              }
-              fill
-              preload={featured}
-              onError={(event) => {
-                event.currentTarget.hidden = true;
-              }}
-            />
-          )}
-          {item.videoAvailable && (
-            <video
-              className="motion-preview"
-              preload="none"
-              muted
-              loop
-              playsInline
-              aria-hidden="true"
-              onPlaying={(event) => {
-                if (preview.current === event.currentTarget)
-                  event.currentTarget.setAttribute("data-playing", "");
-              }}
-              onError={(event) => {
-                if (preview.current === event.currentTarget) stopPreview();
-              }}
-            />
-          )}
-          {featured && (
-            <span className="motion-badge">★ FEATURED SHOWREEL</span>
-          )}
-          {item.videoAvailable && (
-            <span className="motion-play" aria-hidden="true">
-              <Play
-                size={featured ? 24 : 17}
-                fill="currentColor"
-                strokeWidth={0}
-              />
-            </span>
-          )}
-          <span className="motion-caption">
-            <span>
-              <span className="motion-label">
-                {featured ? "Showreel" : "Motion Graphics"}
-              </span>
-              <span className="motion-title">{item.title}</span>
-            </span>
-            {featured && item.duration !== undefined && (
-              <span className="motion-duration">
-                {formatTime(item.duration)}
-              </span>
-            )}
-            {!item.videoAvailable && (
-              <span className="motion-duration">Unavailable</span>
-            )}
-          </span>
-        </button>
-      </article>
-    );
-  }
+  const cardHandlers = {
+    onPreview: startPreview,
+    onStop: stopPreview,
+    onOpen: (button: HTMLButtonElement, item: GalleryItem) => {
+      opener.current = button;
+      modalOpen.current = true;
+      stopPreview();
+      setGalleryPlaying(true);
+      setSelected(item);
+    },
+    onPlaying: (video: HTMLVideoElement) => {
+      if (preview.current === video) video.setAttribute("data-playing", "");
+    },
+    onError: (video: HTMLVideoElement) => {
+      if (preview.current === video) stopPreview();
+    },
+  };
 
   const rows = (
-    <div className={showreel ? "motion-rows" : "motion-rows featured-grid"}>
+    <div
+      className={
+        variant === "portrait"
+          ? "motion-portrait-grid"
+          : variant === "featured"
+            ? "motion-rows featured-grid"
+            : "motion-rows"
+      }
+    >
       {Array.from({ length: Math.ceil(projects.length / 2) }, (_, row) => (
         <div className="motion-row" key={row}>
           {projects.slice(row * 2, row * 2 + 2).map((item) => (
             <div className="motion-cell" key={item.id}>
-              {card(item)}
+              <MotionCard
+                id={variant === "featured" ? `featured-${item.id}` : item.id}
+                item={item}
+                reveal={variant !== "featured"}
+                sizes={
+                  variant === "portrait"
+                    ? "(max-width: 400px) 90vw, 350px"
+                    : undefined
+                }
+                {...cardHandlers}
+              />
             </div>
           ))}
         </div>
@@ -267,23 +318,34 @@ export function MotionGallery({
   );
 
   return (
-    <div className="motion-gallery">
-      {showreel ? (
-        <>
-          {card(showreel, true)}
-          <section className="motion-projects" aria-labelledby="category-0">
-            <header className="work-categoryHeader">
-              <span className="work-categoryIndex" aria-hidden="true">
-                01
-              </span>
-              <h2 id="category-0">Motion Graphics</h2>
-              <span className="work-categoryCount">
-                {String(projects.length).padStart(2, "0")} PROJECTS
-              </span>
-            </header>
-            {rows}
-          </section>
-        </>
+    <div
+      ref={gallery}
+      className={
+        variant ? `motion-gallery motion-gallery-${variant}` : "motion-gallery"
+      }
+    >
+      {showreel && variant === "hero" ? (
+        <MotionCard
+          id={`hero-${showreel.id}`}
+          item={showreel}
+          sizes="(max-width: 660px) 95vw, (max-width: 900px) 56vw, 60vw"
+          featured
+          reveal={false}
+          {...cardHandlers}
+        />
+      ) : !variant ? (
+        <section className="motion-projects" aria-labelledby="category-0">
+          <header className="work-categoryHeader">
+            <span className="work-categoryIndex" aria-hidden="true">
+              01
+            </span>
+            <h3 id="category-0">Motion Graphics</h3>
+            <span className="work-categoryCount">
+              {String(projects.length).padStart(2, "0")} PROJECTS
+            </span>
+          </header>
+          {rows}
+        </section>
       ) : (
         rows
       )}

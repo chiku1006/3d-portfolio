@@ -1,5 +1,5 @@
 import type { Project } from "@/src/data/projects";
-import { VideoPlayer } from "./VideoPlayer";
+import { MotionGallery } from "./MotionGallery";
 import "./work.css";
 
 interface Props {
@@ -16,18 +16,16 @@ export function ProjectCard({
   const titleId = `${project.id}-title`;
 
   return (
-    <article id={project.id} className="work-card" aria-labelledby={titleId}>
-      <VideoPlayer
-        title={project.title}
-        videoSrc={project.videoSrc}
-        portrait={project.category === "Short-Form Editing"}
-        posterSrc={posterAvailable ? project.posterSrc : undefined}
-        videoAvailable={videoAvailable}
+    <article className="work-card work-card-portrait" aria-labelledby={titleId}>
+      <MotionGallery
+        variant="portrait"
+        projects={[{ ...project, videoAvailable, posterAvailable }]}
       />
       <div className="work-cardDetails">
         <div>
           <p className="work-projectCategory">{project.category}</p>
           <h3 id={titleId}>{project.title}</h3>
+          <p className="work-projectCopy">{project.description}</p>
         </div>
         <p className="work-projectType">{project.type}</p>
       </div>
