@@ -233,12 +233,14 @@ export function Hall({
   motion,
   active,
   lightweight,
+  reducedMotion,
 }: {
   stops: Stop[];
   screens: Screen[];
   motion: RefObject<TourMotion>;
   active: number;
   lightweight: boolean;
+  reducedMotion: boolean;
 }) {
   const { width, height } = useThree((state) => state.size);
   const aspect = width / Math.max(height, 1);
@@ -267,12 +269,12 @@ export function Hall({
       {planets.map((planet) => (
         <Planet key={planet.kind} {...planet} motion={motion} lightweight={lightweight} />
       ))}
-      <Spacecraft {...spacecraft} nearby={active < 2} motion={motion} />
+      <Spacecraft {...spacecraft} nearby={!reducedMotion && active < 2} motion={motion} />
       {poses[bioIndex] && poses[toolsIndex] && (
         <OrbitalDetails
           astronaut={layoutOrbitalDetail(poses[bioIndex], aspect, height, "astronaut")}
           satellite={layoutOrbitalDetail(poses[toolsIndex], aspect, height, "satellite")}
-          nearby={active === bioIndex || active === toolsIndex}
+          nearby={!reducedMotion && (active === bioIndex || active === toolsIndex)}
           motion={motion}
         />
       )}

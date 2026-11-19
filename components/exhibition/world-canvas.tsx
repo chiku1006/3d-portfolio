@@ -42,13 +42,16 @@ type WorldProps = {
   modalOpen: boolean;
   active: number;
   forceLightweight: boolean;
+  backdrop: boolean;
+  reducedMotion: boolean;
 };
 
 function CameraPath({
   stops,
   screens,
   motion,
-}: Pick<WorldProps, "stops" | "motion"> & {
+  reducedMotion,
+}: Pick<WorldProps, "stops" | "motion" | "reducedMotion"> & {
   screens: Screen[];
 }) {
   const size = useThree((state) => state.size);
@@ -96,9 +99,9 @@ function CameraPath({
       : 0;
     const x = baseX + steer;
     const y = MathUtils.lerp(a.y, b.y, mix);
-    const pointerStrength =
-      1 -
-      0.8 * MathUtils.smoothstep(progress, poses.length - 2, poses.length - 1);
+    const pointerStrength = reducedMotion
+      ? 0
+      : 1 - 0.8 * MathUtils.smoothstep(progress, poses.length - 2, poses.length - 1);
     position.set(
       x + pointerX * 0.35 * pointerStrength,
       y + turn * 0.34 + pointerY * 0.18 * pointerStrength,
@@ -113,7 +116,7 @@ function CameraPath({
       z - 21,
     );
     const snap =
-      first.current || camera.position.distanceToSquared(position) > 2100;
+      reducedMotion || first.current || camera.position.distanceToSquared(position) > 2100;
     const mixFrame = snap ? 1 : 1 - Math.exp(-Math.min(delta, 0.05) * 15);
     first.current = false;
     camera.position.lerp(position, mixFrame);
@@ -246,7 +249,9 @@ function ExhibitionWorld({
   modalOpen,
   onOpen,
   lightweight,
-}: Pick<WorldProps, "stops" | "selectedProjects" | "motion" | "active" | "modalOpen" | "onOpen"> & {
+  backdrop,
+  reducedMotion,
+}: Pick<WorldProps, "stops" | "selectedProjects" | "motion" | "active" | "modalOpen" | "onOpen" | "backdrop" | "reducedMotion"> & {
   screens: Screen[];
   lightweight: boolean;
 }) {
@@ -258,8 +263,9 @@ function ExhibitionWorld({
         motion={motion}
         active={active}
         lightweight={lightweight}
+        reducedMotion={reducedMotion}
       />
-      {screens.map((screen) => {
+      {!backdrop && screens.map((screen) => {
         const stop = stops[screen.index];
         const item = stop.kind === "media"
           ? stop.items[selectedProjects[stop.id] ?? 0] ?? screen.item
@@ -282,7 +288,7 @@ function ExhibitionWorld({
 export default function WorldCanvas(props: WorldProps) {
   const screens = useMemo(() => layoutScreens(props.stops), [props.stops]);
   const [touchPrimary] = useState(() => window.matchMedia("(pointer: coarse)").matches);
-  const lightweight = touchPrimary || props.forceLightweight;
+  const lightweight = touchPrimary || props.forceLightweight || props.backdrop;
   const createRenderer = useCallback(({ canvas }: { canvas: EventTarget }) => {
     if (!(canvas instanceof HTMLCanvasElement)) {
       throw new Error("The 3D scene could not attach to its canvas.");
@@ -315,8 +321,14 @@ export default function WorldCanvas(props: WorldProps) {
         frameloop="demand"
         flat
         gl={createRenderer}
+        style={{ pointerEvents: "inherit" }}
       >
-        <CameraPath stops={props.stops} screens={screens} motion={props.motion} />
+        <CameraPath
+          stops={props.stops}
+          screens={screens}
+          motion={props.motion}
+          reducedMotion={props.reducedMotion}
+        />
         <ExhibitionWorld {...props} screens={screens} lightweight={lightweight} />
         <SceneFrame {...props} />
       </Canvas>

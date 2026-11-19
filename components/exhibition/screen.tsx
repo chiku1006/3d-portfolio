@@ -16,7 +16,7 @@ import type { ExhibitMedia } from "./types";
 import type { Screen } from "./world-layout";
 import { screenFragment, worldVertex } from "./shaders";
 
-const hoverQuery = "(hover: hover) and (pointer: fine)";
+const hoverQuery = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 
 function crop(aspect: number, width: number, height: number) {
   const ratio = width / Math.max(height, 1);
@@ -144,15 +144,18 @@ export function MediaScreen({
 
   useEffect(() => {
     if (!hovered) return;
+    const preference = window.matchMedia(hoverQuery);
     const stop = () => setHovered(false);
     const onVisibility = () => {
       if (document.hidden) stop();
     };
     window.addEventListener("blur", stop);
     document.addEventListener("visibilitychange", onVisibility);
+    preference.addEventListener("change", stop);
     return () => {
       window.removeEventListener("blur", stop);
       document.removeEventListener("visibilitychange", onVisibility);
+      preference.removeEventListener("change", stop);
     };
   }, [hovered]);
 

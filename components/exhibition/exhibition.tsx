@@ -5,6 +5,7 @@ import { ArrowDownRight, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -27,10 +28,10 @@ import {
 
 const World = dynamic(() => import("./world-canvas"), { ssr: false });
 
-const spatialPreference =
-  "(prefers-reduced-motion: no-preference) and (min-height: 500px)";
-const finePointer = "(hover: hover) and (pointer: fine)";
-type WorldStatus = "starting" | "ready" | "recovering" | "failed" | "flat";
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
+const fullViewportQuery = "(min-height: 500px)";
+const finePointer = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
+type WorldStatus = "starting" | "ready" | "recovering" | "failed";
 const links = [
   { label: "Home", id: "home", chapter: 0 },
   { label: "My Work", id: "work", chapter: 2 },
@@ -91,53 +92,65 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   const [selectedProjects, setSelectedProjects] = useState<Record<string, number>>(
     {},
   );
-  const [permitted, setPermitted] = useState(false);
+  const [display, setDisplay] = useState({
+    reducedMotion: false,
+    shortViewport: false,
+    measured: false,
+  });
+  const [view, setView] = useState<"auto" | "2d" | "3d">("auto");
   const [worldStatus, setWorldStatus] = useState<WorldStatus>("starting");
   const [useLightweightRetry, setUseLightweightRetry] = useState(false);
   const [video, setVideo] = useState<ExhibitMedia | null>(null);
   const [inquiry, setInquiry] = useState(false);
   const hasRendered = useRef(false);
-  const showWorld = permitted && worldStatus !== "flat" && worldStatus !== "failed";
-  const spatial = showWorld && worldStatus === "ready";
+  const { reducedMotion, shortViewport, measured } = display;
+  const auto3D = measured && !reducedMotion && !shortViewport;
+  const showWorld =
+    (view === "3d" || (view === "auto" && auto3D)) && worldStatus !== "failed";
+  const worldVisible = showWorld && worldStatus === "ready";
+  const spatial = worldVisible && !shortViewport;
 
   const rememberStop = useCallback(() => {
     restoreStop.current = stops[tour.current.active]?.id ?? null;
   }, [stops]);
   const onReady = useCallback(() => {
-    if (!restoreStop.current && (hasRendered.current || tour.current.active > 0)) {
+    if (!shortViewport && !restoreStop.current && (hasRendered.current || tour.current.active > 0)) {
       rememberStop();
     }
     hasRendered.current = true;
     setWorldStatus("ready");
-  }, [rememberStop]);
+  }, [rememberStop, shortViewport]);
   const onContextLost = useCallback(() => {
-    if (hasRendered.current) rememberStop();
+    if (!shortViewport && hasRendered.current) rememberStop();
     setWorldStatus("recovering");
-  }, [rememberStop]);
+  }, [rememberStop, shortViewport]);
   const onFailure = useCallback((error: Error) => {
-    if (hasRendered.current) rememberStop();
+    if (!shortViewport && hasRendered.current) rememberStop();
     console.warn("[Portfolio 3D] Using the 2D view.", error);
     setWorldStatus("failed");
-  }, [rememberStop]);
+  }, [rememberStop, shortViewport]);
+
+  const updateDisplay = useEffectEvent((reducedMotion: boolean, shortViewport: boolean) => {
+    if (hasRendered.current) rememberStop();
+    if (view === "auto" && (reducedMotion || shortViewport)) {
+      setWorldStatus((current) => current === "failed" ? current : "starting");
+    }
+    setDisplay({ reducedMotion, shortViewport, measured: true });
+  });
 
   useEffect(() => {
-    const preference = window.matchMedia(spatialPreference);
-    const update = () => {
-      if (hasRendered.current) rememberStop();
-      if (!preference.matches) {
-        setWorldStatus((current) =>
-          current === "ready" || current === "recovering" ? "starting" : current,
-        );
-      }
-      setPermitted(preference.matches);
-    };
+    const motion = window.matchMedia(reducedMotionQuery);
+    const height = window.matchMedia(fullViewportQuery);
+    const update = () => updateDisplay(motion.matches, !height.matches);
     const frame = requestAnimationFrame(update);
-    preference.addEventListener("change", update);
+    motion.addEventListener("change", update);
+    height.addEventListener("change", update);
     return () => {
       cancelAnimationFrame(frame);
-      preference.removeEventListener("change", update);
+      motion.removeEventListener("change", update);
+      height.removeEventListener("change", update);
     };
-  }, [rememberStop]);
+  }, []);
 
   useEffect(() => {
     if (!showWorld || worldStatus === "ready") return;
@@ -165,7 +178,8 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    const preference = window.matchMedia(spatialPreference);
+    const height = window.matchMedia(fullViewportQuery);
+    const motion = window.matchMedia(reducedMotionQuery);
     gsap.registerPlugin(ScrollTrigger);
     const nodes = Array.from(
       track.querySelectorAll<HTMLElement>("[data-stop]"),
@@ -180,7 +194,8 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     }
     function update(y: number) {
       // A rotating device can resize the old layout before React switches modes.
-      if (preference.matches !== permitted) return;
+      const isShort = !height.matches;
+      if (isShort !== shortViewport || motion.matches !== reducedMotion) return;
       let index = centers.findLastIndex((stop) => stop <= y + 1);
       index = Math.max(0, index);
       const next = centers[index + 1];
@@ -195,7 +210,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
               (stop) => stop <= y + Math.min(160, window.innerHeight * 0.28),
             ),
           );
-      tour.current.progress = index + travel;
+      tour.current.progress = reducedMotion ? selected : index + travel;
       if (tour.current.active !== selected) {
         tour.current.active = selected;
         setActive(selected);
@@ -218,7 +233,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       start: "top top",
       end: "bottom bottom",
       animation: tween,
-      scrub: spatial ? 0.23 : true,
+      scrub: spatial && !reducedMotion ? 0.23 : true,
       onRefresh: readPositions,
     });
     tween.eventCallback("onUpdate", () =>
@@ -266,7 +281,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       trigger.kill();
       tween.kill();
     };
-  }, [permitted, spatial, stops]);
+  }, [shortViewport, reducedMotion, spatial, stops]);
 
   useEffect(() => {
     const fine = window.matchMedia(finePointer);
@@ -343,7 +358,11 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   const reelStop = stops.find((stop) => stop.chapter === 1);
   const showreel = reelStop?.kind === "media" ? reelStop.items[0] : undefined;
   return (
-    <div className="exhibition" data-spatial={spatial || undefined}>
+    <div
+      className="exhibition"
+      data-world={worldVisible || undefined}
+      data-spatial={spatial || undefined}
+    >
       <Opening />
       <header className="exhibit-header">
         <a
@@ -379,20 +398,23 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
             </a>
           ))}
         </nav>
-        {permitted && (
-          <button
-            type="button"
-            className="exhibit-mode"
-            title={worldStatus === "failed" ? "Retry the 3D view with lighter graphics" : undefined}
-            onClick={() => {
-              rememberStop();
-              if (worldStatus === "failed") setUseLightweightRetry(true);
-              setWorldStatus(showWorld ? "flat" : "starting");
-            }}
-          >
-            {spatial ? "2D view" : showWorld ? "Cancel 3D" : "3D view"}
-          </button>
-        )}
+        <button
+          type="button"
+          className="exhibit-mode"
+          disabled={!measured}
+          title={worldStatus === "failed" ? "Retry the 3D view with lighter graphics" : undefined}
+          onClick={() => {
+            if (!shortViewport) rememberStop();
+            if (worldStatus === "failed") setUseLightweightRetry(true);
+            setWorldStatus("starting");
+            setView(showWorld ? "2d" : "3d");
+          }}
+        >
+          {worldVisible ? "2D view" : showWorld ? "Cancel 3D" : "3D view"}
+        </button>
+        <p className="exhibit-mode-status" role="status">
+          {view === "3d" && worldStatus === "failed" && "3D couldn’t start. You can keep browsing in 2D."}
+        </p>
       </header>
 
       {showWorld && (
@@ -408,6 +430,8 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
             onOpen={openVideo}
             active={active}
             modalOpen={Boolean(video || inquiry)}
+            backdrop={shortViewport}
+            reducedMotion={reducedMotion}
             forceLightweight={useLightweightRetry}
           />
         </WorldBoundary>
