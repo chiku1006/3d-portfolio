@@ -154,20 +154,6 @@ export function layoutOrbitalDetail(
   return { position, scale: tight ? 0.50 : compact ? 0.66 : astronaut ? 1.04 : 0.92 };
 }
 
-export function layoutToolTiles(pose: Pose, aspect: number, height: number) {
-  const compact = aspect < 1.06;
-  const tight = compact && height < 650;
-  const distance = 14;
-  const x = compact ? -0.35 : 0.53;
-  const y = tight ? 0.705 : compact ? 0.68 : -0.14;
-  const position: [number, number, number] = [
-    pose.x + distance * tangent * aspect * x,
-    pose.y + distance * ((pose.lookY - pose.y) / 21 + tangent * y),
-    pose.z - distance,
-  ];
-  return { position, scale: tight ? 0.32 : compact ? 0.43 : 1, compact };
-}
-
 export function layoutPlanets(
   stops: Stop[],
   poses: Pose[],

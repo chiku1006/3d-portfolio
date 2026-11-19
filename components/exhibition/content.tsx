@@ -5,10 +5,10 @@ import type { ExhibitMedia, MediaStop } from "./types";
 import type { MouseEvent, ReactNode } from "react";
 
 export const tools = [
-  { icon: "/icons/adobe-premiere-pro.svg", name: "Adobe Premiere Pro", rim: "#a88ced" },
-  { icon: "/icons/adobe-after-effects.svg", name: "Adobe After Effects", rim: "#7e93f8" },
-  { icon: "/icons/adobe-photoshop.svg", name: "Adobe Photoshop", rim: "#56bfff" },
-  { icon: "/icons/adobe-illustrator.svg", name: "Adobe Illustrator", rim: "#ffac68" },
+  { icon: "/icons/adobe-premiere-pro.svg", name: "Adobe Premiere Pro" },
+  { icon: "/icons/adobe-after-effects.svg", name: "Adobe After Effects" },
+  { icon: "/icons/adobe-photoshop.svg", name: "Adobe Photoshop" },
+  { icon: "/icons/adobe-illustrator.svg", name: "Adobe Illustrator" },
 ];
 
 const stats = [

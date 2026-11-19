@@ -14,7 +14,6 @@ import {
   type RefObject,
 } from "react";
 import { MathUtils, SRGBColorSpace, Vector3, type Texture } from "three";
-import { tools } from "./content";
 import { Hall } from "./hall";
 import { MediaScreen } from "./screen";
 import type { ExhibitMedia, Stop, TourMotion } from "./types";
@@ -200,7 +199,6 @@ function ExhibitionWorld({
       ...screens
         .filter(({ item }) => item.posterAvailable)
         .map(({ item }) => item.posterSrc),
-      ...tools.map(({ icon }) => icon),
     ],
     [screens],
   );
@@ -223,7 +221,7 @@ function ExhibitionWorld({
   useEffect(onReady, [onReady]);
   return (
     <>
-      <Hall stops={stops} screens={screens} motion={motion} maps={maps} active={active} />
+      <Hall stops={stops} screens={screens} motion={motion} active={active} />
       {screens.map((screen) => {
         const stop = stops[screen.index];
         const item = stop.kind === "media"

@@ -14,7 +14,6 @@ html:has(.exhibition[data-spatial]) {
 
 .exhibit-opening {
   --opening-time: 5.2s;
-  --opening-orbit-time: 4.25s;
   position: fixed;
   z-index: 40;
   inset: 0;
@@ -24,139 +23,167 @@ html:has(.exhibition[data-spatial]) {
 .opening-scene {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 30px;
-  overflow: hidden;
   isolation: isolate;
+  overflow: hidden;
   background:
-    radial-gradient(ellipse at 52% 45%, #1a2348 0%, #0c132c 27%, #050812 69%);
+    radial-gradient(ellipse at 72% 34%, #11152b 0%, transparent 57%),
+    linear-gradient(122deg, #04050a 16%, #080913 63%, #030409);
   transition: opacity 300ms ease-out;
 }
 .exhibit-opening[data-skipping] .opening-scene {
   opacity: 0;
 }
-.opening-scene::before {
+.opening-stars {
   position: absolute;
-  z-index: -1;
-  inset: -14%;
-  background-image:
-    radial-gradient(circle at 20% 70%, #afceff 0.6px, transparent 1.4px),
-    radial-gradient(circle at 78% 27%, #9f92db 0.5px, transparent 1.3px),
-    radial-gradient(circle at 55% 46%, #a4dcfa 0.65px, transparent 1.5px);
-  background-size: 103px 127px, 167px 149px, 241px 193px;
-  animation: opening-drift var(--opening-time) ease-out both;
+  left: -9vw;
+  top: -9vh;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  animation: opening-star-drift var(--opening-time) ease-out both;
+}
+.opening-stars-near {
+  width: 1.7px;
+  height: 1.7px;
+  animation-name: opening-star-drift-near;
+}
+.opening-eclipse {
+  position: absolute;
+  top: 51%;
+  right: -5vw;
+  width: clamp(460px, 65vw, 890px);
+  aspect-ratio: 1;
+  animation: opening-eclipse-in var(--opening-time) cubic-bezier(.21,.66,.32,1) both;
+}
+.opening-eclipse::before {
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 34% 34%, #586bd138, #314b7a24 39%, transparent 65%);
+  filter: blur(22px);
   content: "";
 }
-.opening-horizon {
+.opening-corona {
   position: absolute;
-  z-index: -1;
-  top: 84%;
-  left: 50%;
-  width: max(760px, 94vw);
-  aspect-ratio: 1;
-  border: 1px solid rgb(163 195 255 / 35%);
+  inset: 7.8%;
   border-radius: 50%;
-  background: radial-gradient(ellipse at 50% 0%, #233951, #090e20 20%);
-  box-shadow: 0 -5px 32px rgb(115 161 245 / 23%);
-  animation: opening-horizon var(--opening-orbit-time) cubic-bezier(.2,.65,.32,1) both;
+  background: conic-gradient(
+    #a1c9ff, #7e9fec 49deg, #272c54 112deg, #101529 161deg,
+    #1a2544 211deg, #5d76be 255deg, #b6afff 303deg, #d5eeff 328deg, #a1c9ff
+  );
+  mask-image: radial-gradient(farthest-side, transparent 93%, #000 97%, transparent 100%);
 }
-.opening-orbit {
-  position: relative;
-  display: grid;
-  width: clamp(145px, 25vw, 228px);
-  aspect-ratio: 1;
-  place-items: center;
-  isolation: isolate;
-  animation: opening-arrive 1.4s cubic-bezier(.16,1,.3,1) both;
+.opening-planet {
+  position: absolute;
+  inset: 9%;
+  overflow: hidden;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 24% 10%, #304276 0%, #1b2447 13%, #090d1f 31%, #03050c 56%),
+    #03050c;
+  box-shadow: inset 3px 3px 12px #8dbbff45, 2px 5px 65px #010207;
 }
-.opening-orbit::before,
-.opening-orbit::after {
+.opening-planet::after {
   position: absolute;
   inset: 0;
-  z-index: -1;
-  border: 1px solid rgb(159 201 255 / 18%);
-  border-radius: 50%;
+  background:
+    repeating-radial-gradient(ellipse at 24% 0%, transparent 0 18px, #a7bdff18 20px 22px, transparent 28px 36px),
+    radial-gradient(ellipse at 22% 13%, #8b79c831, transparent 36%);
+  mask-image: radial-gradient(ellipse at 18% 8%, #000, transparent 58%);
+  transform: rotate(-13deg) scale(1.15);
   content: "";
 }
-.opening-orbit::after {
-  inset: 13%;
-  border-style: dashed;
-  border-color: rgb(143 157 232 / 25%);
-  transform: rotate(-24deg) scaleY(0.74);
-}
-.opening-sweep {
+.opening-flare {
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  border: 1px solid transparent;
-  border-top-color: #9eeaff;
-  border-right-color: #8a82db;
-  border-radius: 50%;
-  animation: opening-orbit var(--opening-orbit-time) cubic-bezier(.16,.58,.27,1) both;
+  top: 20%;
+  left: 22%;
+  width: 66%;
+  height: 18%;
+  background:
+    radial-gradient(ellipse at center, #eff9ffdf 0%, #adc8fa8c 2%, #849df23d 9%, transparent 62%) center / 100% 7% no-repeat,
+    radial-gradient(ellipse at center, #bed6ff73, #7894ee2e 18%, transparent 56%);
+  animation: opening-flare-in 2.8s ease-out both;
 }
-.opening-sweep::after {
+.opening-title {
   position: absolute;
-  top: 13%;
-  right: 12%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d4f7ff;
-  box-shadow: 0 0 14px 3px #8bdcff;
-  content: "";
+  top: 47%;
+  left: var(--edge);
+  transform: translateY(-50%);
+  font: 700 clamp(64px, 8.7vw, 145px)/0.88 var(--display);
+  color: #f0f3fc;
 }
-.opening-monogram {
-  font: 700 clamp(46px, 9vw, 75px)/1 var(--display);
-  letter-spacing: -0.085em;
-  text-shadow: 0 0 38px rgb(150 176 255 / 35%);
+.opening-title > span,
+.opening-title > em {
+  display: block;
+  animation: opening-title-in 1.25s cubic-bezier(.19,1,.3,1) both;
 }
-.opening-monogram span {
+.opening-title > em {
+  width: fit-content;
+  padding-inline-end: 0.06em;
+  background: linear-gradient(98deg, #ffffff, #c4e3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font: italic 400 1.15em/0.96 var(--serif);
+  letter-spacing: -0.02em;
+  animation-delay: 140ms;
+}
+.opening-title em span {
   color: var(--accent);
 }
 .opening-caption {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
+  position: absolute;
+  right: var(--edge);
+  bottom: clamp(26px, 7svh, 70px);
+  left: var(--edge);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  padding-top: 17px;
+  border-top: 1px solid #9eb6ee38;
+  animation: opening-title-in 850ms ease-out both;
 }
 .opening-caption p {
-  color: #a8b7d1;
+  color: #bbc8e1;
   font: 11px/1.4 ui-monospace, monospace;
-  letter-spacing: 0.17em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 .opening-caption > span {
   position: relative;
-  width: 118px;
-  height: 1px;
-  overflow: hidden;
-  background: rgb(159 201 255 / 16%);
+  width: clamp(85px, 14vw, 195px);
+  height: 2px;
+  background: #b5c8fa2b;
 }
 .opening-caption > span::after {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #7778d2, #c1efff);
+  background: linear-gradient(90deg, #5e64ad, #c1ecff);
+  box-shadow: 0 0 13px #648af6a6;
   transform-origin: left;
-  animation: opening-line var(--opening-orbit-time) cubic-bezier(.22,.65,.38,1) both;
+  animation: opening-line 4s linear both;
   content: "";
 }
-@keyframes opening-orbit {
-  from { transform: rotate(-136deg); }
-  to { transform: rotate(432deg); }
+@keyframes opening-star-drift {
+  from { opacity: 0.25; transform: translate(0, 8px); }
+  to { opacity: 0.75; transform: translate(-10px, -17px); }
 }
-@keyframes opening-arrive {
-  from { opacity: 0.2; transform: scale(0.87); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes opening-star-drift-near {
+  from { opacity: 0.18; transform: translate(0, 15px); }
+  to { opacity: 1; transform: translate(20px, -39px); }
 }
-@keyframes opening-drift {
-  from { opacity: 0.12; transform: translateY(18px) scale(0.95); }
-  to { opacity: 0.55; transform: translateY(-11px) scale(1.03); }
+@keyframes opening-eclipse-in {
+  from { opacity: 0.32; transform: translate(4%, -46%) scale(0.84) rotate(-8deg); }
+  to { opacity: 1; transform: translate(0, -52%) scale(1) rotate(0deg); }
 }
-@keyframes opening-horizon {
-  from { opacity: 0; transform: translate(-50%, 35px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+@keyframes opening-flare-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.65) rotate(-24deg); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-24deg); }
+}
+@keyframes opening-title-in {
+  from { opacity: 0; transform: translateY(0.32em); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes opening-line {
   from { transform: scaleX(0); }
@@ -165,6 +192,25 @@ html:has(.exhibition[data-spatial]) {
 @keyframes opening-timeout {
   0%, 76% { opacity: 1; visibility: visible; animation-timing-function: ease-in-out; }
   to { opacity: 0; visibility: hidden; }
+}
+@media (max-width: 720px) {
+  .opening-eclipse {
+    top: 39%;
+    right: -33vw;
+    width: min(127vw, 690px);
+  }
+  .opening-title {
+    top: auto;
+    bottom: 22%;
+    transform: none;
+    font-size: clamp(58px, 13.4vw, 98px);
+  }
+}
+@media (forced-colors: active) {
+  .opening-title > em {
+    background: none;
+    color: CanvasText;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .exhibit-opening {

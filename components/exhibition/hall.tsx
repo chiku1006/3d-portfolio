@@ -10,9 +10,7 @@ import {
   Vector3,
   type Group,
   type ShaderMaterial,
-  type Texture,
 } from "three";
-import { FloatingTools } from "./floating-tools";
 import {
   atmosphereFragment,
   nebulaFragment,
@@ -35,7 +33,6 @@ import {
   layoutOrbitalDetail,
   layoutPlanets,
   layoutSpacecraft,
-  layoutToolTiles,
   type PlanetPlacement,
   type Screen,
 } from "./world-layout";
@@ -237,13 +234,11 @@ export function Hall({
   stops,
   screens,
   motion,
-  maps,
   active,
 }: {
   stops: Stop[];
   screens: Screen[];
   motion: RefObject<TourMotion>;
-  maps: Record<string, Texture>;
   active: number;
 }) {
   const { width, height } = useThree((state) => state.size);
@@ -313,13 +308,6 @@ export function Hall({
       >
         Chiku
       </Text>
-      {poses[toolsIndex] && (
-        <FloatingTools
-          {...layoutToolTiles(poses[toolsIndex], aspect, height)}
-          maps={maps}
-          motion={motion}
-        />
-      )}
     </>
   );
 }

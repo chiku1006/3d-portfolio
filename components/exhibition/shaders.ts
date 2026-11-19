@@ -1,4 +1,4 @@
-export const spaceBackground = "#050812";
+export const spaceBackground = "#04050a";
 
 export const worldVertex = /* glsl */ `
   varying vec2 vUv;
@@ -20,18 +20,13 @@ export const screenFragment = /* glsl */ `
   void main() {
     vec2 posterUv = (vUv - 0.5) * uPosterCrop + 0.5;
     vec3 colour = texture2D(uPoster, posterUv).rgb;
-    if (uVideoMix > 0.001) {
-      vec2 uv = (vUv - 0.5) * uVideoCrop + 0.5;
-      vec2 stepUV = vec2(0.007) * uVideoCrop;
-      vec3 moving = texture2D(uVideo, uv).rgb * 0.24;
-      moving += texture2D(uVideo, uv + vec2(stepUV.x, 0.0)).rgb * 0.19;
-      moving += texture2D(uVideo, uv - vec2(stepUV.x, 0.0)).rgb * 0.19;
-      moving += texture2D(uVideo, uv + vec2(0.0, stepUV.y)).rgb * 0.19;
-      moving += texture2D(uVideo, uv - vec2(0.0, stepUV.y)).rgb * 0.19;
-      colour = mix(colour, moving * 0.68, uVideoMix);
-    }
     float vignette = smoothstep(0.27, 0.75, length(vUv - 0.5));
     colour *= 1.0 - vignette * 0.22;
+    if (uVideoMix > 0.001) {
+      vec2 uv = (vUv - 0.5) * uVideoCrop + 0.5;
+      vec3 moving = sRGBTransferEOTF(texture2D(uVideo, uv)).rgb;
+      colour = mix(colour, moving, uVideoMix);
+    }
     gl_FragColor = vec4(colour, uOpacity);
     #include <colorspace_fragment>
   }
@@ -81,7 +76,7 @@ export const nebulaFragment = /* glsl */ `
     vec3 violet = vec3(0.024, 0.012, 0.052);
     vec3 indigo = vec3(0.008, 0.023, 0.050);
     vec3 light = mix(violet, indigo, right) * arc * (0.26 + 0.68 * right);
-    gl_FragColor = vec4(uSpace + light + low * vec3(0.010, 0.012, 0.026), 1.0);
+    gl_FragColor = vec4(uSpace + light * 0.39 + low * vec3(0.0035, 0.0042, 0.0091), 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -108,7 +103,7 @@ export const starsVertex = /* glsl */ `
     vGlint = smoothstep(0.94, 1.0, aAppearance.x) * (1.0 - uNearLayer);
     gl_PointSize = (1.48 + aAppearance.x * 1.52 + 4.2 * vGlint) * uDpr *
       mix(1.0, distanceScale, uNearLayer);
-    vBrightness = (0.15 + aAppearance.x * 0.53) * mix(0.62, 1.0, edge) *
+    vBrightness = (0.13 + aAppearance.x * 0.49) * mix(0.62, 1.0, edge) *
       mix(1.0, fade, uNearLayer);
     vTint = aAppearance.y;
   }
@@ -189,7 +184,7 @@ export const planetFragment = /* glsl */ `
     float streak = 0.5 + 0.5 * sin(p.y * 27.0 + current * 5.2 + detail);
     float pattern = mix(veil, veil * 0.42 + streak * 0.58, uBands);
     float rim = pow(1.0 - facing, 4.7) * (0.035 + 0.64 * smoothstep(-0.52, 0.87, sunlight));
-    vec3 colour = uNight + uDay * day * (0.11 + pattern * 0.73) + uRim * rim;
+    vec3 colour = uNight * 0.8 + uDay * day * (0.08 + pattern * 0.47) + uRim * rim * 0.72;
     gl_FragColor = vec4(colour, uPresence);
     #include <colorspace_fragment>
   }
@@ -206,7 +201,7 @@ export const atmosphereFragment = /* glsl */ `
     vec3 n = normalize(vNormal);
     float edge = abs(dot(n, normalize(vView)));
     float lit = smoothstep(-0.72, 0.69, dot(n, mat3(viewMatrix) * uSun));
-    float glow = pow(smoothstep(0.0, 0.34, edge), 2.85) * (0.020 + lit * 0.24);
+    float glow = pow(smoothstep(0.0, 0.34, edge), 2.85) * (0.015 + lit * 0.19);
     gl_FragColor = vec4(uRim, glow * uPresence);
     #include <colorspace_fragment>
   }
