@@ -12,7 +12,7 @@ import {
   type ShaderMaterial,
   type Texture,
 } from "three";
-import { tools } from "./content";
+import { FloatingTools } from "./floating-tools";
 import {
   atmosphereFragment,
   nebulaFragment,
@@ -35,6 +35,7 @@ import {
   layoutOrbitalDetail,
   layoutPlanets,
   layoutSpacecraft,
+  layoutToolTiles,
   type PlanetPlacement,
   type Screen,
 } from "./world-layout";
@@ -312,31 +313,13 @@ export function Hall({
       >
         Chiku
       </Text>
-      <group position={[6.3, -0.7, toolsDepth - 1]}>
-        {tools.map(({ icon }, i) => (
-          <group
-            key={icon}
-            position={[(i % 2) * 1.3, Math.floor(i / 2) * 1.3, i * -0.16]}
-          >
-            <mesh>
-              <boxGeometry args={[1.12, 1.12, 0.16]} />
-              <meshStandardMaterial
-                color="#172337"
-                roughness={0.42}
-                metalness={0.48}
-              />
-            </mesh>
-            <mesh position={[0, 0, 0.09]}>
-              <planeGeometry args={[0.69, 0.69]} />
-              <meshBasicMaterial
-                map={maps[icon]}
-                transparent
-                toneMapped={false}
-              />
-            </mesh>
-          </group>
-        ))}
-      </group>
+      {poses[toolsIndex] && (
+        <FloatingTools
+          {...layoutToolTiles(poses[toolsIndex], aspect, height)}
+          maps={maps}
+          motion={motion}
+        />
+      )}
     </>
   );
 }

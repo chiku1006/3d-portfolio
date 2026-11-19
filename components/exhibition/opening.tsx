@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 export function Opening() {
   const layer = useRef<HTMLDivElement>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   useEffect(() => {
     if (dismissed) return;
@@ -17,13 +18,14 @@ export function Opening() {
       return () => cancelAnimationFrame(frame);
     }
 
-    window.addEventListener("pointerdown", dismiss, { once: true });
-    window.addEventListener("keydown", dismiss, { once: true });
-    window.addEventListener("wheel", dismiss, { once: true, passive: true });
+    const skip = () => setSkipping(true);
+    window.addEventListener("pointerdown", skip, { once: true });
+    window.addEventListener("keydown", skip, { once: true });
+    window.addEventListener("wheel", skip, { once: true, passive: true });
     return () => {
-      window.removeEventListener("pointerdown", dismiss);
-      window.removeEventListener("keydown", dismiss);
-      window.removeEventListener("wheel", dismiss);
+      window.removeEventListener("pointerdown", skip);
+      window.removeEventListener("keydown", skip);
+      window.removeEventListener("wheel", skip);
     };
   }, [dismissed]);
 
@@ -32,12 +34,18 @@ export function Opening() {
     <div
       ref={layer}
       className="exhibit-opening"
+      data-skipping={skipping || undefined}
       aria-hidden="true"
       onAnimationEnd={(event) => {
         if (event.target === event.currentTarget) setDismissed(true);
       }}
     >
-      <div className="opening-scene">
+      <div
+        className="opening-scene"
+        onTransitionEnd={(event) => {
+          if (event.target === event.currentTarget && skipping) setDismissed(true);
+        }}
+      >
         <div className="opening-horizon" />
         <div className="opening-orbit">
           <span className="opening-sweep" />

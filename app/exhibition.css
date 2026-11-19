@@ -13,7 +13,8 @@ html:has(.exhibition[data-spatial]) {
 }
 
 .exhibit-opening {
-  --opening-time: 3.6s;
+  --opening-time: 5.2s;
+  --opening-orbit-time: 4.25s;
   position: fixed;
   z-index: 40;
   inset: 0;
@@ -32,6 +33,10 @@ html:has(.exhibition[data-spatial]) {
   isolation: isolate;
   background:
     radial-gradient(ellipse at 52% 45%, #1a2348 0%, #0c132c 27%, #050812 69%);
+  transition: opacity 300ms ease-out;
+}
+.exhibit-opening[data-skipping] .opening-scene {
+  opacity: 0;
 }
 .opening-scene::before {
   position: absolute;
@@ -56,7 +61,7 @@ html:has(.exhibition[data-spatial]) {
   border-radius: 50%;
   background: radial-gradient(ellipse at 50% 0%, #233951, #090e20 20%);
   box-shadow: 0 -5px 32px rgb(115 161 245 / 23%);
-  animation: opening-horizon 3s cubic-bezier(.2,.65,.32,1) both;
+  animation: opening-horizon var(--opening-orbit-time) cubic-bezier(.2,.65,.32,1) both;
 }
 .opening-orbit {
   position: relative;
@@ -90,7 +95,7 @@ html:has(.exhibition[data-spatial]) {
   border-top-color: #9eeaff;
   border-right-color: #8a82db;
   border-radius: 50%;
-  animation: opening-orbit 2.95s cubic-bezier(.16,.58,.27,1) both;
+  animation: opening-orbit var(--opening-orbit-time) cubic-bezier(.16,.58,.27,1) both;
 }
 .opening-sweep::after {
   position: absolute;
@@ -134,7 +139,7 @@ html:has(.exhibition[data-spatial]) {
   inset: 0;
   background: linear-gradient(90deg, #7778d2, #c1efff);
   transform-origin: left;
-  animation: opening-line 2.9s cubic-bezier(.22,.65,.38,1) both;
+  animation: opening-line var(--opening-orbit-time) cubic-bezier(.22,.65,.38,1) both;
   content: "";
 }
 @keyframes opening-orbit {
@@ -158,7 +163,7 @@ html:has(.exhibition[data-spatial]) {
   to { transform: scaleX(1); }
 }
 @keyframes opening-timeout {
-  0%, 81% { opacity: 1; visibility: visible; animation-timing-function: ease-in-out; }
+  0%, 76% { opacity: 1; visibility: visible; animation-timing-function: ease-in-out; }
   to { opacity: 0; visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
