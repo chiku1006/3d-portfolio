@@ -11,6 +11,104 @@ html:has(.exhibition) {
 html:has(.exhibition[data-spatial]) {
   scroll-padding-top: 0;
 }
+
+.exhibit-opening {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  pointer-events: none;
+  animation: opening-timeout 1.45s linear both;
+}
+.opening-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 27px;
+  background:
+    radial-gradient(ellipse at 52% 47%, #171d42 0%, #0b1025 29%, #050812 68%);
+}
+.exhibit-opening[data-reveal] .opening-scene {
+  animation: opening-reveal 280ms ease-in both;
+}
+.opening-orbit {
+  position: relative;
+  display: grid;
+  width: clamp(138px, 24vw, 210px);
+  aspect-ratio: 1;
+  place-items: center;
+  isolation: isolate;
+}
+.opening-orbit::before,
+.opening-orbit::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid rgb(159 201 255 / 18%);
+  border-radius: 50%;
+  content: "";
+}
+.opening-orbit::after {
+  inset: 13%;
+  border-style: dashed;
+  border-color: rgb(143 157 232 / 25%);
+  transform: rotate(-24deg) scaleY(0.74);
+}
+.opening-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid transparent;
+  border-top-color: #9eeaff;
+  border-right-color: #8a82db;
+  border-radius: 50%;
+  animation: opening-orbit 920ms cubic-bezier(.2,.7,.4,1) both;
+}
+.opening-sweep::after {
+  position: absolute;
+  top: 13%;
+  right: 12%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d4f7ff;
+  box-shadow: 0 0 14px 3px #8bdcff;
+  content: "";
+}
+.opening-monogram {
+  font: 700 clamp(46px, 9vw, 75px)/1 var(--display);
+  letter-spacing: -0.085em;
+  text-shadow: 0 0 38px rgb(150 176 255 / 35%);
+}
+.opening-monogram span {
+  color: var(--accent);
+}
+.exhibit-opening p {
+  color: #a8b7d1;
+  font: 11px/1.4 ui-monospace, monospace;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+@keyframes opening-orbit {
+  from { transform: rotate(-142deg); }
+  to { transform: rotate(188deg); }
+}
+@keyframes opening-timeout {
+  0%, 80% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@keyframes opening-reveal {
+  from { opacity: 1; visibility: visible; }
+  to { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .exhibit-opening {
+    display: none;
+  }
+}
+
 .exhibit-header {
   position: fixed;
   z-index: 20;
@@ -832,6 +930,22 @@ html:has(.exhibition[data-spatial]) {
   }
   .exhibit-nav {
     gap: 8px;
+  }
+}
+
+@media (max-height: 650px) and (max-aspect-ratio: 53/50) {
+  [data-spatial] #tools .station-body {
+    align-items: end;
+  }
+  [data-spatial] .tools-layout {
+    padding-block: 14px;
+  }
+  [data-spatial] .tools-layout .exhibit-stats {
+    margin-block: 9px 11px;
+    padding-block: 9px 10px;
+  }
+  [data-spatial] .tools-layout .chiku-note {
+    margin-top: 14px;
   }
 }
 

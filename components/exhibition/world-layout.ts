@@ -133,6 +133,27 @@ export function layoutSpacecraft(pose: Pose, aspect: number, height: number) {
   return { position, scale: short ? 0.37 : compact ? 0.48 : 0.57 };
 }
 
+export function layoutOrbitalDetail(
+  pose: Pose,
+  aspect: number,
+  height: number,
+  kind: "astronaut" | "satellite",
+) {
+  const compact = aspect < 1.06;
+  const tight = compact && height < 650;
+  const distance = 17;
+  const astronaut = kind === "astronaut";
+  const x = astronaut ? (compact ? 0.47 : -0.43) : (compact ? 0.38 : 0.69);
+  const y = astronaut ? (compact ? 0.64 : 0.57) : (compact ? 0.62 : 0.33);
+  const rise = tight ? y + (astronaut ? 0.03 : 0.105) : y;
+  const position: [number, number, number] = [
+    pose.x + distance * tangent * aspect * x,
+    pose.y + distance * ((pose.lookY - pose.y) / 21 + tangent * rise),
+    pose.z - distance,
+  ];
+  return { position, scale: tight ? 0.50 : compact ? 0.66 : astronaut ? 1.04 : 0.92 };
+}
+
 export function layoutPlanets(
   stops: Stop[],
   poses: Pose[],

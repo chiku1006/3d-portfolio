@@ -16,6 +16,7 @@ import { MotionDialog } from "@/src/components/MotionGallery";
 import { HireForm } from "@/components/hire-form";
 import { contact } from "@/src/data/site";
 import { Arrival, Bio, ContactContent, MediaContent, Tools } from "./content";
+import { Opening } from "./opening";
 import {
   chapters,
   type ExhibitMedia,
@@ -290,6 +291,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   const showreel = reelStop?.kind === "media" ? reelStop.items[0] : undefined;
   return (
     <div className="exhibition" data-spatial={spatial || undefined}>
+      <Opening ready={ready || !showWorld} />
       <header className="exhibit-header">
         <a
           className="exhibit-logo"

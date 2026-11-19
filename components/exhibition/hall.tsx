@@ -28,9 +28,11 @@ import {
   starsVertex,
 } from "./shaders";
 import { Spacecraft } from "./spacecraft";
+import { OrbitalDetails } from "./orbital-details";
 import {
   depth,
   layoutCamera,
+  layoutOrbitalDetail,
   layoutPlanets,
   layoutSpacecraft,
   type PlanetPlacement,
@@ -254,8 +256,10 @@ export function Hall({
     [stops, poses, aspect, height],
   );
   const spacecraft = layoutSpacecraft(poses[0], aspect, height);
-  const bioDepth = depth(stops.findIndex((stop) => stop.kind === "bio"));
-  const toolsDepth = depth(stops.findIndex((stop) => stop.kind === "tools"));
+  const bioIndex = stops.findIndex((stop) => stop.kind === "bio");
+  const toolsIndex = stops.findIndex((stop) => stop.kind === "tools");
+  const bioDepth = depth(bioIndex);
+  const toolsDepth = depth(toolsIndex);
   const endDepth = depth(stops.length - 1);
   return (
     <>
@@ -272,7 +276,7 @@ export function Hall({
           depthWrite={false}
         />
       </mesh>
-      <ambientLight intensity={1.3} color="#7f9cb7" />
+      <ambientLight intensity={1.3} color="#8ca2c2" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
       <Stars end={endDepth} />
       <Stars end={endDepth} near />
@@ -280,13 +284,21 @@ export function Hall({
         <Planet key={planet.kind} {...planet} motion={motion} />
       ))}
       <Spacecraft {...spacecraft} nearby={active < 2} motion={motion} />
+      {poses[bioIndex] && poses[toolsIndex] && (
+        <OrbitalDetails
+          astronaut={layoutOrbitalDetail(poses[bioIndex], aspect, height, "astronaut")}
+          satellite={layoutOrbitalDetail(poses[toolsIndex], aspect, height, "satellite")}
+          nearby={active === bioIndex || active === toolsIndex}
+          motion={motion}
+        />
+      )}
       <Text
         font="/fonts/InstrumentSerif-Italic.ttf"
         fontSize={9.8}
         color="#22364f"
         position={[-1, 0.45, bioDepth - 4]}
         anchorX="center"
-        fillOpacity={0.55}
+        fillOpacity={0.32}
       >
         SM
       </Text>
@@ -296,7 +308,7 @@ export function Hall({
         color="#3e617e"
         position={[2, 1.55, toolsDepth - 5]}
         anchorX="center"
-        fillOpacity={0.43}
+        fillOpacity={0.28}
       >
         Chiku
       </Text>
