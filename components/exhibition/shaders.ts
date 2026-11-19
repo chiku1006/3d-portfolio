@@ -1,4 +1,4 @@
-export const spaceBackground = "#04050a";
+export const spaceBackground = "#020307";
 
 export const worldVertex = /* glsl */ `
   varying vec2 vUv;
@@ -76,7 +76,7 @@ export const nebulaFragment = /* glsl */ `
     vec3 violet = vec3(0.024, 0.012, 0.052);
     vec3 indigo = vec3(0.008, 0.023, 0.050);
     vec3 light = mix(violet, indigo, right) * arc * (0.26 + 0.68 * right);
-    gl_FragColor = vec4(uSpace + light * 0.39 + low * vec3(0.0035, 0.0042, 0.0091), 1.0);
+    gl_FragColor = vec4(uSpace + light * 0.22 + low * vec3(0.0020, 0.0024, 0.0050), 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -184,7 +184,7 @@ export const planetFragment = /* glsl */ `
     float streak = 0.5 + 0.5 * sin(p.y * 27.0 + current * 5.2 + detail);
     float pattern = mix(veil, veil * 0.42 + streak * 0.58, uBands);
     float rim = pow(1.0 - facing, 4.7) * (0.035 + 0.64 * smoothstep(-0.52, 0.87, sunlight));
-    vec3 colour = uNight * 0.8 + uDay * day * (0.08 + pattern * 0.47) + uRim * rim * 0.72;
+    vec3 colour = uNight * 0.72 + uDay * day * (0.07 + pattern * 0.42) + uRim * rim * 0.65;
     gl_FragColor = vec4(colour, uPresence);
     #include <colorspace_fragment>
   }
