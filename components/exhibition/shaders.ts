@@ -24,7 +24,10 @@ export const screenFragment = /* glsl */ `
     colour *= 1.0 - vignette * 0.22;
     if (uVideoMix > 0.001) {
       vec2 uv = (vUv - 0.5) * uVideoCrop + 0.5;
-      vec3 moving = sRGBTransferEOTF(texture2D(uVideo, uv)).rgb;
+      vec2 offset = vec2(0.0018, 0.0018);
+      vec4 preview = texture2D(uVideo, uv) * 0.5 +
+        (texture2D(uVideo, uv - offset) + texture2D(uVideo, uv + offset)) * 0.25;
+      vec3 moving = sRGBTransferEOTF(preview).rgb;
       colour = mix(colour, moving, uVideoMix);
     }
     gl_FragColor = vec4(colour, uOpacity);
@@ -84,10 +87,12 @@ export const planetVertex = /* glsl */ `
   varying vec3 vSurface;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec2 vSurfaceUv;
 
   void main() {
     vec4 view = modelViewMatrix * vec4(position, 1.0);
     vSurface = normal;
+    vSurfaceUv = uv;
     vNormal = normalMatrix * normal;
     vView = -view.xyz;
     gl_Position = projectionMatrix * view;
@@ -101,10 +106,12 @@ export const planetFragment = /* glsl */ `
   uniform vec3 uSun;
   uniform float uBands;
   uniform float uPresence;
-  uniform bool uFineDetail;
+  uniform bool uSurfaceReady;
+  uniform sampler2D uSurface;
   varying vec3 vSurface;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec2 vSurfaceUv;
 
   float hash(vec3 p) {
     p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -125,16 +132,18 @@ export const planetFragment = /* glsl */ `
 
   void main() {
     vec3 n = normalize(vNormal);
-    vec3 p = normalize(vSurface);
     float facing = max(dot(n, normalize(vView)), 0.0);
     float sunlight = dot(n, mat3(viewMatrix) * uSun);
     float day = smoothstep(-0.27, 0.86, sunlight);
-    float current = noise(p * 4.8 + 9.2);
-    float detail = noise(p * vec3(12.0, 19.0, 12.0) + current * 3.8);
-    float fine = uFineDetail ? noise(p * 49.0 + detail * 1.3) : 0.5;
-    float veil = smoothstep(0.31, 0.82, current * 0.47 + detail * 0.39 + fine * 0.14);
-    float streak = 0.5 + 0.5 * sin(p.y * 27.0 + current * 5.2 + detail);
-    float pattern = mix(veil, veil * 0.42 + streak * 0.58, uBands);
+    vec2 surface;
+    if (uSurfaceReady) {
+      surface = texture2D(uSurface, vSurfaceUv).rg;
+    } else {
+      vec3 p = normalize(vSurface);
+      float coarse = noise(p * 4.8 + 9.2);
+      surface = vec2(smoothstep(0.31, 0.82, coarse), 0.5 + 0.5 * sin(p.y * 27.0 + coarse * 5.2));
+    }
+    float pattern = mix(surface.r, surface.r * 0.42 + surface.g * 0.58, uBands);
     float rim = pow(1.0 - facing, 4.7) * (0.035 + 0.64 * smoothstep(-0.52, 0.87, sunlight));
     vec3 colour = uNight * 0.72 + uDay * day * (0.07 + pattern * 0.42) + uRim * rim * 0.65;
     gl_FragColor = vec4(colour, uPresence);

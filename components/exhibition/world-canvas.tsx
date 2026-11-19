@@ -23,13 +23,16 @@ import {
 } from "three";
 import { Hall } from "./hall";
 import { MediaScreen } from "./screen";
+import { advanceCamera, createTrajectory } from "./camera-trajectory";
 import { createFramePacing, qualityLevels, sampleFramePacing, type SceneQuality } from "./scene-quality";
+import { createTexturePreparation, type TexturePreparation } from "./texture-preparation";
 import type { ExhibitMedia, Stop, TourMotion } from "./types";
 import {
   fieldOfView,
   layoutCamera,
   layoutScreens,
   type Screen,
+  type Pose,
 } from "./world-layout";
 
 type WorldProps = {
@@ -41,7 +44,7 @@ type WorldProps = {
   onContextLost: () => void;
   onFailure: (error: Error) => void;
   onOpen: (item: ExhibitMedia) => void;
-  onCameraFrame: (progress: number, moving: boolean) => void;
+  onCameraFrame: (progress: number, moving: boolean, settling: boolean) => void;
   onActive?: (index: number) => void;
   modalOpen: boolean;
   active: number;
@@ -61,28 +64,13 @@ function CameraPath({
   screens: Screen[];
 }) {
   const size = useThree((state) => state.size);
-  const invalidate = useThree((state) => state.invalidate);
   const poses = useMemo(
     () => layoutCamera(stops, screens, size.width / Math.max(size.height, 1), size.height),
     [stops, screens, size.width, size.height],
   );
-  const crossings = useMemo(
-    () =>
-      poses.map((pose, i) => {
-        const next = poses[i + 1];
-        if (!next) return null;
-        const screen = screens.find(({ z }) => pose.z > z && next.z < z);
-        return screen
-          ? {
-              at: (pose.z - screen.z) / (pose.z - next.z),
-              clearX: screen.x - screen.side * (screen.width * 0.5 + 1.3),
-            }
-          : null;
-      }),
-    [poses, screens],
-  );
+  const sample = useMemo(() => createTrajectory(poses, screens), [poses, screens]);
+  const pose = useRef<Pose>({ x: 0, y: 0, z: 0, lookX: 0, lookY: 0 });
   const target = useMemo(() => new Vector3(), []);
-  const position = useMemo(() => new Vector3(), []);
   const scroll = useRef<number | null>(null);
   const lastSnap = useRef(-1);
   const pointer = useRef({ x: 0, y: 0 });
@@ -90,67 +78,39 @@ function CameraPath({
   useFrame(({ camera }, delta) => {
     const tour = motion.current;
     if (document.hidden || tour.modal) {
-      onCameraFrame(tour.progress, false);
+      onCameraFrame(tour.progress, false, false);
       return;
     }
     const dt = Math.min(delta, tour.moving ? 0.05 : 1 / 60);
     const goal = reducedMotion ? tour.active : tour.target;
     const previous = scroll.current ?? goal;
-    const remaining = goal - previous;
-    const current = reducedMotion || lastSnap.current !== tour.snap || Math.abs(remaining) < 0.001
+    const current = reducedMotion || lastSnap.current !== tour.snap
       ? goal
-      : previous + MathUtils.clamp(remaining * (1 - Math.exp(-dt * 17)), -9 * dt, 9 * dt);
+      : advanceCamera(previous, goal, dt);
     scroll.current = current;
     lastSnap.current = tour.snap;
-    const moving = current !== goal || Math.abs(current - previous) >= 0.001;
-
-    // Ease each station's path after smoothing the shared scroll position once.
-    // Every animated object and the chapter indicator read this displayed position.
-    const station = Math.floor(current);
-    const travel = MathUtils.clamp((current - station - 0.17) / 0.69, 0, 1);
-    const progress = station + travel * travel * (3 - 2 * travel);
-    onCameraFrame(progress, moving);
-    onActive?.(Math.round(progress));
+    onActive?.(Math.round(current));
 
     const xOffset = reducedMotion ? 0 : tour.pointerX;
     const yOffset = reducedMotion ? 0 : tour.pointerY;
     const eye = pointer.current;
     eye.x = Math.abs(eye.x - xOffset) < 0.002 ? xOffset : MathUtils.damp(eye.x, xOffset, 19, dt);
     eye.y = Math.abs(eye.y - yOffset) < 0.002 ? yOffset : MathUtils.damp(eye.y, yOffset, 19, dt);
-    const low = Math.min(poses.length - 1, Math.floor(progress));
-    const high = Math.min(poses.length - 1, low + 1);
-    const mix = MathUtils.clamp(progress - low, 0, 1);
-    const a = poses[low];
-    const b = poses[high];
-    const turn = Math.sin(mix * Math.PI);
-    const z = MathUtils.lerp(a.z, b.z, mix);
-    const baseX = MathUtils.lerp(a.x, b.x, mix);
-    const crossing = crossings[low];
-    const steer = crossing
-      ? (crossing.clearX - baseX) *
-        (MathUtils.smoothstep(mix, 0, crossing.at) -
-          MathUtils.smoothstep(mix, crossing.at, 1))
-      : 0;
-    const x = baseX + steer;
-    const y = MathUtils.lerp(a.y, b.y, mix);
-    const pointerStrength = 1 - 0.8 * MathUtils.smoothstep(progress, poses.length - 2, poses.length - 1);
-    position.set(
+    sample(current, pose.current);
+    const { x, y, z, lookX, lookY } = pose.current;
+    const pointerStrength = 1 - 0.8 * MathUtils.smoothstep(current, poses.length - 2, poses.length - 1);
+    camera.position.set(
       x + eye.x * 0.35 * pointerStrength,
-      y + turn * 0.34 + eye.y * 0.18 * pointerStrength,
+      y + eye.y * 0.18 * pointerStrength,
       z,
     );
     target.set(
-      MathUtils.lerp(a.lookX, b.lookX, mix) +
-        (b.x - a.x) * turn * 0.17 +
-        steer * 0.72 +
-        eye.x * 0.09 * pointerStrength,
-      MathUtils.lerp(a.lookY, b.lookY, mix) + eye.y * 0.06 * pointerStrength,
+      lookX + eye.x * 0.09 * pointerStrength,
+      lookY + eye.y * 0.06 * pointerStrength,
       z - 21,
     );
-    camera.position.copy(position);
     camera.lookAt(target);
-    if (current !== goal || eye.x !== xOffset || eye.y !== yOffset)
-      invalidate();
+    onCameraFrame(current, current !== goal, eye.x !== xOffset || eye.y !== yOffset);
   }, -2);
 
   return (
@@ -166,12 +126,13 @@ function CameraPath({
 
 function SceneFrame({
   frameRequestRef, onReady, onContextLost, onFailure, motion, ambient,
-  level, bestLevel, onQuality,
-}: Pick<WorldProps, "frameRequestRef" | "onReady" | "onContextLost" | "onFailure" | "motion"> & {
+  level, bestLevel, onQuality, preparation, reducedMotion,
+}: Pick<WorldProps, "frameRequestRef" | "onReady" | "onContextLost" | "onFailure" | "motion" | "reducedMotion"> & {
   ambient: boolean;
   level: number;
   bestLevel: number;
   onQuality: (level: number) => void;
+  preparation: TexturePreparation;
 }) {
   const gl = useThree((state) => state.gl);
   const invalidate = useThree((state) => state.invalidate);
@@ -181,6 +142,8 @@ function SceneFrame({
   const rendered = useRef(false);
   const failed = useRef(false);
   const pacing = useRef(createFramePacing());
+  const primed = useRef(false);
+  const calibration = useRef({ start: 0, remaining: 15 });
   const suspend = useCallback(() => {
     if (lost.current || failed.current) return;
     lost.current = true;
@@ -198,6 +161,8 @@ function SceneFrame({
     };
     const onRestored = () => {
       lost.current = false;
+      primed.current = false;
+      calibration.current.remaining = 0;
       request();
     };
     frameRequestRef.current = request;
@@ -233,7 +198,20 @@ function SceneFrame({
       suspend();
       return;
     }
+    const { moving, settling, modal } = motion.current;
+    if (modal && rendered.current) return;
+    const prepNeeded = preparation.pending || !primed.current;
     try {
+      if (!moving && !settling && !modal && rendered.current) {
+        const hadUpload = preparation.pending;
+        preparation.prepareOne(gl);
+        if (!hadUpload && !primed.current) {
+          primed.current = true;
+          if (gl.extensions.has("KHR_parallel_shader_compile")) {
+            void gl.compileAsync(scene, camera).catch(() => {});
+          }
+        }
+      }
       gl.render(scene, camera);
     } catch (error) {
       if (context.isContextLost()) {
@@ -244,8 +222,19 @@ function SceneFrame({
       }
       return;
     }
-    const next = sampleFramePacing(pacing.current, performance.now(), motion.current.moving, level, bestLevel);
+    const now = performance.now();
+    const startup = calibration.current;
+    if (!startup.start) startup.start = now;
+    if (moving || settling || reducedMotion || motion.current.active !== 0 || now - startup.start > 950) {
+      startup.remaining = 0;
+    }
+    // A brief home-scene sample fits under the entry animation. Skip frames
+    // that upload assets or prepare programs, and stop at the first interaction.
+    const calibrating = startup.remaining > 0 && !prepNeeded;
+    if (calibrating) startup.remaining--;
+    const next = sampleFramePacing(pacing.current, now, moving || calibrating, level, bestLevel);
     if (next !== level) onQuality(next);
+    if (moving || settling || calibrating || preparation.pending || !primed.current) invalidate();
     if (rendered.current) return;
     if (context.isContextLost()) {
       suspend();
@@ -258,14 +247,19 @@ function SceneFrame({
   return null;
 }
 
-const LoadedMediaScreen = memo(function LoadedMediaScreen(props: Omit<ComponentProps<typeof MediaScreen>, "poster">) {
+const LoadedMediaScreen = memo(function LoadedMediaScreen({
+  preparation,
+  ...props
+}: Omit<ComponentProps<typeof MediaScreen>, "poster"> & { preparation: TexturePreparation }) {
   const { posterSrc, posterAvailable } = props.screen.item;
   const [poster, setPoster] = useState<{ src: string; texture: Texture }>();
   const anisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
   const maxSize = useThree((state) => Math.min(1920, state.gl.capabilities.maxTextureSize));
+  const invalidate = useThree((state) => state.invalidate);
   useEffect(() => {
     if (!posterAvailable) return;
     let mounted = true;
+    let cancel: (() => void) | undefined;
     const texture = new TextureLoader().load(
       posterSrc,
       (loaded: Texture<HTMLImageElement | HTMLCanvasElement>) => {
@@ -285,7 +279,8 @@ const LoadedMediaScreen = memo(function LoadedMediaScreen(props: Omit<ComponentP
         }
         loaded.colorSpace = SRGBColorSpace;
         loaded.anisotropy = Math.min(2, anisotropy);
-        setPoster({ src: posterSrc, texture: loaded });
+        cancel = preparation.enqueue(loaded, () => setPoster({ src: posterSrc, texture: loaded }));
+        invalidate();
       },
       undefined,
       (error) => {
@@ -294,9 +289,10 @@ const LoadedMediaScreen = memo(function LoadedMediaScreen(props: Omit<ComponentP
     );
     return () => {
       mounted = false;
+      cancel?.();
       texture.dispose();
     };
-  }, [anisotropy, maxSize, posterAvailable, posterSrc]);
+  }, [anisotropy, invalidate, maxSize, posterAvailable, posterSrc, preparation]);
   return <MediaScreen {...props} poster={poster?.src === posterSrc ? poster.texture : undefined} />;
 });
 
@@ -311,9 +307,11 @@ function ExhibitionWorld({
   quality,
   backdrop,
   reducedMotion,
+  preparation,
 }: Pick<WorldProps, "stops" | "selectedProjects" | "motion" | "active" | "modalOpen" | "onOpen" | "backdrop" | "reducedMotion"> & {
   screens: Screen[];
   quality: SceneQuality;
+  preparation: TexturePreparation;
 }) {
   const mediaScreens = useMemo(() => screens.map((screen) => {
     const stop = stops[screen.index];
@@ -330,6 +328,7 @@ function ExhibitionWorld({
         motion={motion}
         quality={quality}
         reducedMotion={reducedMotion}
+        preparation={preparation}
       />
       {!backdrop && mediaScreens.map((screen) => {
         const focused = active === screen.index || (active === 0 && screen.reel);
@@ -340,6 +339,7 @@ function ExhibitionWorld({
             focused={focused}
             interactive={!modalOpen && focused}
             onOpen={onOpen}
+            preparation={preparation}
           />
         );
       })}
@@ -351,6 +351,7 @@ export default function WorldCanvas(props: WorldProps) {
   const screens = useMemo(() => layoutScreens(props.stops), [props.stops]);
   const [touchPrimary] = useState(() => window.matchMedia("(pointer: coarse)").matches);
   const [selectedLevel, setLevel] = useState(0);
+  const [preparation] = useState(createTexturePreparation);
   const bestLevel = props.forceLightweight ? 2 : Number(touchPrimary || props.backdrop);
   const level = Math.max(bestLevel, selectedLevel);
   const quality = qualityLevels[level];
@@ -396,8 +397,8 @@ export default function WorldCanvas(props: WorldProps) {
           onCameraFrame={props.onCameraFrame}
           onActive={props.onActive}
         />
-        <ExhibitionWorld {...props} screens={screens} quality={quality} />
-        <SceneFrame {...props} ambient={ambient} level={level} bestLevel={bestLevel} onQuality={setLevel} />
+        <ExhibitionWorld {...props} screens={screens} quality={quality} preparation={preparation} />
+        <SceneFrame {...props} ambient={ambient} level={level} bestLevel={bestLevel} onQuality={setLevel} preparation={preparation} />
       </Canvas>
     </div>
   );

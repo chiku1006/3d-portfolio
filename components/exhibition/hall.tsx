@@ -1,16 +1,20 @@
 import { Text } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { memo, Suspense, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
+import { memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   AdditiveBlending,
   BackSide,
   Color,
   DoubleSide,
   MathUtils,
+  RepeatWrapping,
+  SphereGeometry,
+  TextureLoader,
   Vector3,
   type Group,
   type BufferGeometry,
   type ShaderMaterial,
+  type Texture,
 } from "three";
 import {
   atmosphereFragment,
@@ -27,6 +31,7 @@ import {
 import { Spacecraft } from "./spacecraft";
 import { OrbitalDetails } from "./orbital-details";
 import { qualityLevels, type SceneQuality } from "./scene-quality";
+import type { TexturePreparation } from "./texture-preparation";
 import { WorldBoundary } from "./world-boundary";
 import {
   depth,
@@ -68,6 +73,13 @@ const planetLighting = {
     flattening: 1,
   },
 } as const;
+
+function makePlanetLods() {
+  return [
+    { body: new SphereGeometry(1, 48, 34), atmosphere: new SphereGeometry(1, 44, 28) },
+    { body: new SphereGeometry(1, 28, 20), atmosphere: new SphereGeometry(1, 26, 16) },
+  ] as const;
+}
 
 function scatterStars(near: boolean, end: number, count: number) {
   const positions = new Float32Array(count * 3);
@@ -146,8 +158,13 @@ function Planet({
   radius,
   stop,
   motion,
-  quality,
-}: PlanetPlacement & { motion: RefObject<TourMotion>; quality: SceneQuality }) {
+  surface,
+  geometry,
+}: PlanetPlacement & {
+  motion: RefObject<TourMotion>;
+  surface: Texture | undefined;
+  geometry: ReturnType<typeof makePlanetLods>[number];
+}) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const axis = useRef<Group>(null);
@@ -164,9 +181,10 @@ function Planet({
       uSun: { value: new Vector3(...lighting.sun).normalize() },
       uBands: { value: lighting.bands },
       uPresence: { value: 1 },
-      uFineDetail: { value: quality.fineDetail },
+      uSurfaceReady: { value: Boolean(surface) },
+      uSurface: { value: surface ?? null },
     }),
-    [lighting, quality.fineDetail],
+    [lighting, surface],
   );
   const ringUniforms = useMemo(
     () => ({
@@ -198,8 +216,7 @@ function Planet({
     <group ref={root} position={position} scale={radius}>
       <group ref={axis} rotation={[...lighting.tilt]}>
         <group ref={body} scale={[1, lighting.flattening, 1]}>
-          <mesh renderOrder={ringed ? -0.5 : 0}>
-            <sphereGeometry args={[1, quality.planetSegments, Math.round(quality.planetSegments * 0.7)]} />
+          <mesh geometry={geometry.body} renderOrder={ringed ? -0.5 : 0}>
             <shaderMaterial
               ref={surfaceMaterial}
               uniforms={uniforms}
@@ -208,8 +225,7 @@ function Planet({
               transparent={ringed}
             />
           </mesh>
-          <mesh scale={kind === "contact" ? 1.02 : 1.043}>
-            <sphereGeometry args={[1, quality.planetSegments, Math.round(quality.planetSegments * 0.6)]} />
+          <mesh geometry={geometry.atmosphere} scale={kind === "contact" ? 1.02 : 1.043}>
             <shaderMaterial
               ref={atmosphereMaterial}
               uniforms={uniforms}
@@ -224,7 +240,7 @@ function Planet({
         </group>
         {ringed && (
           <mesh rotation-x={Math.PI / 2}>
-            <ringGeometry args={[ringInner, ringOuter, quality.fineDetail ? 96 : 64]} />
+            <ringGeometry args={[ringInner, ringOuter, 96]} />
             <shaderMaterial
               ref={ringMaterial}
               uniforms={ringUniforms}
@@ -247,14 +263,41 @@ export const Hall = memo(function Hall({
   motion,
   quality,
   reducedMotion,
+  preparation,
 }: {
   stops: Stop[];
   screens: Screen[];
   motion: RefObject<TourMotion>;
   quality: SceneQuality;
   reducedMotion: boolean;
+  preparation: TexturePreparation;
 }) {
   const { width, height } = useThree((state) => state.size);
+  const invalidate = useThree((state) => state.invalidate);
+  const [lods] = useState(makePlanetLods);
+  useEffect(() => () => {
+    for (const { body, atmosphere } of lods) {
+      body.dispose();
+      atmosphere.dispose();
+    }
+  }, [lods]);
+  const geometry = quality.dpr < 1 ? lods[1] : lods[0];
+  const [surface, setSurface] = useState<Texture>();
+  useEffect(() => {
+    let disposed = false;
+    let cancel: (() => void) | undefined;
+    const texture = new TextureLoader().load("/textures/planet-surface.png", (loaded) => {
+      if (disposed) return;
+      loaded.wrapS = RepeatWrapping;
+      cancel = preparation.enqueue(loaded, () => setSurface(loaded));
+      invalidate();
+    });
+    return () => {
+      disposed = true;
+      cancel?.();
+      texture.dispose();
+    };
+  }, [invalidate, preparation]);
   const aspect = width / Math.max(height, 1);
   const poses = useMemo(
     () => layoutCamera(stops, screens, aspect, height),
@@ -279,7 +322,7 @@ export const Hall = memo(function Hall({
       <Stars end={endDepth} count={quality.distantStars} />
       <Stars end={endDepth} count={quality.nearStars} near />
       {planets.map((planet) => (
-        <Planet key={planet.kind} {...planet} motion={motion} quality={quality} />
+        <Planet key={planet.kind} {...planet} motion={motion} surface={surface} geometry={geometry} />
       ))}
       <Spacecraft {...spacecraft} motion={motion} reducedMotion={reducedMotion} />
       {poses[bioIndex] && poses[toolsIndex] && (

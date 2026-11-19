@@ -12,8 +12,6 @@ import {
   useState,
   type FocusEvent,
 } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { MotionDialog } from "@/src/components/MotionGallery";
 import { HireForm } from "@/components/hire-form";
 import { contact } from "@/src/data/site";
@@ -122,6 +120,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     progress: 0,
     active: 0,
     moving: false,
+    settling: false,
     snap: 0,
     pointerX: 0,
     pointerY: 0,
@@ -154,9 +153,10 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     tour.current.active = index;
     setActive(index);
   }, []);
-  const onCameraFrame = useCallback((progress: number, moving: boolean) => {
+  const onCameraFrame = useCallback((progress: number, moving: boolean, settling: boolean) => {
     tour.current.progress = progress;
     tour.current.moving = moving;
+    tour.current.settling = settling;
   }, []);
 
   const rememberStop = useCallback(() => {
@@ -180,7 +180,9 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   }, [rememberStop, shortViewport]);
 
   const updateDisplay = useEffectEvent((reducedMotion: boolean, shortViewport: boolean) => {
-    if (hasRendered.current) rememberStop();
+    if (hasRendered.current) {
+      restoreStop.current = stops[Math.round(tour.current.target)]?.id ?? null;
+    }
     if (view === "auto" && (reducedMotion || shortViewport)) {
       setWorldStatus((current) => current === "failed" ? current : "starting");
     }
@@ -227,21 +229,20 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    const height = window.matchMedia(fullViewportQuery);
     const motion = window.matchMedia(reducedMotionQuery);
-    gsap.registerPlugin(ScrollTrigger);
     const nodes = Array.from(
       track.querySelectorAll<HTMLElement>("[data-stop]"),
     );
     let centers: number[] = [];
+    let readingOffset = 0;
     function readPositions() {
-      centers = nodes.map(
-        (node) => node.getBoundingClientRect().top + window.scrollY,
-      );
+      const y = window.scrollY;
+      centers = nodes.map((node) => node.getBoundingClientRect().top + y);
+      readingOffset = Math.min(160, window.innerHeight * 0.28);
     }
     function update(y: number, snap = false) {
       // A rotating device can resize the old layout before React switches modes.
-      const isShort = !height.matches;
+      const isShort = window.innerHeight < 500;
       if (isShort !== shortViewport || motion.matches !== reducedMotion) return;
       let index = centers.findLastIndex((stop) => stop <= y + 1);
       index = Math.max(0, index);
@@ -251,9 +252,9 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       const target = index + Math.max(0, Math.min(1, local));
       if (!spatial || snap || reducedMotion) {
         const selected = spatial
-          ? index + Number(local >= 0.515)
+          ? Math.round(target)
           : Math.max(0, centers.findLastIndex(
-              (stop) => stop <= y + Math.min(160, window.innerHeight * 0.28),
+              (stop) => stop <= y + readingOffset,
             ));
         selectStop(selected);
       }
@@ -263,17 +264,17 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       invalidate.current?.();
     }
 
+    const onScroll = () => update(window.scrollY);
+    const onResize = () => {
+      if ((window.innerHeight < 500) !== shortViewport) return;
+      readPositions();
+      onScroll();
+    };
     readPositions();
-    const trigger = ScrollTrigger.create({
-      trigger: track,
-      start: "top top",
-      end: "bottom bottom",
-      onUpdate: (self) => update(self.scroll()),
-      onRefresh: (self) => {
-        readPositions();
-        update(self.scroll());
-      },
-    });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+    const observer = new ResizeObserver(onResize);
+    observer.observe(track);
 
     function resolveProjectLink(fragment: string) {
       if (!fragment || stops.some((stop) => stop.id === fragment)) return;
@@ -304,14 +305,15 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       restoreStop.current = null;
       if (id)
         document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
-      ScrollTrigger.refresh();
-      trigger.update();
+      readPositions();
       update(window.scrollY, true);
     });
     return () => {
       window.removeEventListener("hashchange", onHashChange);
       cancelAnimationFrame(frame);
-      trigger.kill();
+      observer.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [shortViewport, reducedMotion, spatial, stops, selectStop]);
 

@@ -11,6 +11,7 @@ html:has(.exhibition) {
 }
 html:has(.exhibition[data-spatial]) {
   scroll-padding-top: 0;
+  scroll-behavior: auto;
 }
 
 .exhibit-opening {

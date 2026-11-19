@@ -29,6 +29,7 @@ export type TourMotion = {
   progress: number;
   active: number;
   moving: boolean;
+  settling: boolean;
   snap: number;
   pointerX: number;
   pointerY: number;
