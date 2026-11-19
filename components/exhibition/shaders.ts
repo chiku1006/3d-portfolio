@@ -1,4 +1,4 @@
-export const spaceBackground = "#020307";
+export const spaceBackground = "#010103";
 
 export const worldVertex = /* glsl */ `
   varying vec2 vUv;
@@ -28,55 +28,6 @@ export const screenFragment = /* glsl */ `
       colour = mix(colour, moving, uVideoMix);
     }
     gl_FragColor = vec4(colour, uOpacity);
-    #include <colorspace_fragment>
-  }
-`;
-
-export const nebulaVertex = /* glsl */ `
-  varying vec3 vSky;
-
-  void main() {
-    vSky = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    gl_Position.z = gl_Position.w;
-  }
-`;
-
-export const nebulaFragment = /* glsl */ `
-  uniform vec3 uSpace;
-  varying vec3 vSky;
-
-  float hash(vec2 p) {
-    vec3 h = fract(p.xyx * 0.1031);
-    h += dot(h, h.yzx + 33.33);
-    return fract((h.x + h.y) * h.z);
-  }
-
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(hash(i), hash(i + vec2(1, 0)), f.x),
-      mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y
-    );
-  }
-
-  void main() {
-    vec3 dir = normalize(vSky);
-    vec2 sky = dir.xy / max(0.40, -dir.z);
-    vec2 p = vec2(sky.x + sky.y * 0.70, sky.y - sky.x * 0.27);
-    float warp = noise(p * 5.0 + 8.4) - 0.5;
-    float soft = exp(-pow((p.y - 0.21 + warp * 0.14) * 4.9, 2.0));
-    float fibres = noise(p * vec2(5.0, 15.0) + warp * 1.7) * 0.63 +
-      noise(p * vec2(12.0, 38.0)) * 0.37;
-    float arc = soft * (0.36 + 0.64 * smoothstep(0.23, 0.8, fibres));
-    float right = smoothstep(-0.48, 0.63, sky.x);
-    float low = exp(-length((sky - vec2(-0.57, -0.44)) * vec2(2.7, 3.3)));
-    vec3 violet = vec3(0.024, 0.012, 0.052);
-    vec3 indigo = vec3(0.008, 0.023, 0.050);
-    vec3 light = mix(violet, indigo, right) * arc * (0.26 + 0.68 * right);
-    gl_FragColor = vec4(uSpace + light * 0.22 + low * vec3(0.0020, 0.0024, 0.0050), 1.0);
     #include <colorspace_fragment>
   }
 `;

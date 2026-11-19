@@ -5,7 +5,7 @@
 }
 
 html:has(.exhibition) {
-  --background: #020307;
+  --background: #010103;
   scroll-padding-top: 84px;
   scroll-behavior: smooth;
 }
@@ -84,7 +84,7 @@ html:has(.exhibition[data-spatial]) {
   position: absolute;
   z-index: -1;
   inset: 0 calc(-1 * var(--edge)) -20px;
-  background: linear-gradient(var(--background) 8%, rgb(2 3 7 / 80%) 48%, transparent);
+  background: linear-gradient(var(--background) 8%, rgb(1 1 3 / 80%) 48%, transparent);
   pointer-events: none;
 }
 .exhibit-logo {
@@ -189,7 +189,6 @@ html:has(.exhibition[data-spatial]) {
 }
 .exhibit-stop[data-kind="arrival"] {
   min-height: 100svh;
-  background: radial-gradient(ellipse at 74% 45%, #0c1b2a, transparent 54%);
 }
 .exhibit-stop[data-kind="contact"] {
   min-height: 100svh;

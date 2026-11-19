@@ -13,8 +13,6 @@ import {
 } from "three";
 import {
   atmosphereFragment,
-  nebulaFragment,
-  nebulaVertex,
   planetFragment,
   planetVertex,
   ringsFragment,
@@ -37,8 +35,6 @@ import {
   type Screen,
 } from "./world-layout";
 import type { Stop, TourMotion } from "./types";
-
-const skyUniforms = { uSpace: { value: new Color(spaceBackground) } };
 
 const planetLighting = {
   arrival: {
@@ -261,17 +257,6 @@ export function Hall({
     <>
       <color attach="background" args={[spaceBackground]} />
       <fogExp2 attach="fog" args={[spaceBackground, 0.024]} />
-      <mesh position={[0, 0, endDepth * 0.5]} frustumCulled={false} renderOrder={-10}>
-        <sphereGeometry args={[1800, 28, 18]} />
-        <shaderMaterial
-          uniforms={skyUniforms}
-          vertexShader={nebulaVertex}
-          fragmentShader={nebulaFragment}
-          side={BackSide}
-          depthTest={false}
-          depthWrite={false}
-        />
-      </mesh>
       <ambientLight intensity={1.3} color="#8ca2c2" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
       <Stars end={endDepth} />
