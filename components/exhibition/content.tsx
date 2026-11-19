@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Play } from "lucide-react";
 import Image from "next/image";
+import { SpiralGalaxy } from "./spiral-galaxy";
 import { contact, socialProfiles } from "@/src/data/site";
 import type { ExhibitMedia, MediaStop } from "./types";
 import type { MouseEvent, ReactNode } from "react";
@@ -239,39 +240,42 @@ export function Bio() {
 
 export function Tools() {
   return (
-    <div className="tools-layout" data-reading="">
-      <header>
-        <p className="exhibit-kicker">
-          <span /> The edit suite
-        </p>
-        <h2 id="tools-title">
-          My creative <em>tools.</em>
-        </h2>
-      </header>
-      <dl className="exhibit-stats">
-        {stats.map(([value, label]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <ul className="suite-tools" aria-label="Software">
-        {tools.map(({ icon, name }) => (
-          <li key={name}>
-            <Image src={icon} alt="" width={24} height={24} unoptimized />
-            {name}
-          </li>
-        ))}
-      </ul>
-      <div className="chiku-note">
-        <h3>Soumen / Chiku</h3>
-        <p>
-          You might have spotted &apos;Designed by Chiku&apos; in some of my
-          edits. Chiku is the name I create under, a different signature for the
-          same work.
-        </p>
+    <div className="tools-scene">
+      <div className="tools-layout" data-reading="">
+        <header>
+          <p className="exhibit-kicker">
+            <span /> The edit suite
+          </p>
+          <h2 id="tools-title">
+            My creative <em>tools.</em>
+          </h2>
+        </header>
+        <dl className="exhibit-stats">
+          {stats.map(([value, label]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <ul className="suite-tools" aria-label="Software">
+          {tools.map(({ icon, name }) => (
+            <li key={name}>
+              <Image src={icon} alt="" width={24} height={24} unoptimized />
+              {name}
+            </li>
+          ))}
+        </ul>
+        <div className="chiku-note">
+          <h3>Soumen / Chiku</h3>
+          <p>
+            You might have spotted &apos;Designed by Chiku&apos; in some of my
+            edits. Chiku is the name I create under, a different signature for the
+            same work.
+          </p>
+        </div>
       </div>
+      <SpiralGalaxy />
     </div>
   );
 }

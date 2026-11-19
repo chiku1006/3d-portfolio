@@ -46,7 +46,7 @@ export function Opening() {
           if (event.target === event.currentTarget && skipping) setDismissed(true);
         }}
       >
-        <span className="opening-wordmark">sm</span>
+        <span className="opening-wordmark">sm<span>.</span></span>
         <span className="opening-bar" />
       </div>
     </div>

@@ -39,6 +39,35 @@ html:has(.exhibition[data-spatial]) {
   font: 700 clamp(24px, 2.5vw, 34px)/1 var(--display);
   letter-spacing: -0.018em;
 }
+.opening-wordmark span {
+  color: #9deaff;
+}
+.tools-scene {
+  display: grid;
+  grid-template-columns: minmax(0, 715px) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(20px, 2.5vw, 46px);
+}
+.tools-ascii {
+  justify-self: center;
+  display: block;
+  width: min(100%, 760px);
+  height: auto;
+  mask-image: radial-gradient(ellipse closest-side, #000 60%, #000a 82%, transparent 100%);
+}
+[data-spatial] .tools-scene {
+  display: block;
+}
+[data-spatial] .tools-ascii {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .tools-scene {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 24px;
+  }
+}
 .opening-bar {
   width: min(200px, 56vw);
   height: 1px;
