@@ -9,12 +9,13 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  type ComponentProps,
   type ReactNode,
   type RefObject,
 } from "react";
 import { MathUtils, SRGBColorSpace, Vector3, type Texture } from "three";
 import { tools } from "./content";
-import { Hall } from "./hall";
+import { Hall, planetTextures } from "./hall";
 import { MediaScreen } from "./screen";
 import type { ExhibitMedia, Stop, TourMotion } from "./types";
 import {
@@ -26,6 +27,7 @@ import {
 
 type WorldProps = {
   stops: Stop[];
+  selectedProjects: Record<string, number>;
   motion: RefObject<TourMotion>;
   frameRequestRef: RefObject<(() => void) | null>;
   onReady: () => void;
@@ -64,7 +66,7 @@ function CameraPath({
   const invalidate = useThree((state) => state.invalidate);
   const canvas = useThree((state) => state.gl.domElement);
   const poses = useMemo(
-    () => layoutCamera(stops, screens, size.width / Math.max(size.height, 1)),
+    () => layoutCamera(stops, screens, size.width / Math.max(size.height, 1), size.height),
     [stops, screens, size.width, size.height],
   );
   const crossings = useMemo(
@@ -165,15 +167,32 @@ function CameraPath({
   );
 }
 
+function configureTexture(texture: Texture, anisotropy: number) {
+  texture.colorSpace = SRGBColorSpace;
+  texture.anisotropy = anisotropy;
+  texture.needsUpdate = true;
+}
+
+function LoadedMediaScreen(props: Omit<ComponentProps<typeof MediaScreen>, "poster">) {
+  const texture = useTexture(props.screen.item.posterSrc);
+  const limit = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
+  useLayoutEffect(() => {
+    configureTexture(texture, Math.min(4, limit));
+    return () => texture.dispose();
+  }, [texture, limit]);
+  return <MediaScreen {...props} poster={texture} />;
+}
+
 function ExhibitionWorld({
   screens,
   stops,
+  selectedProjects,
   motion,
   active,
   modalOpen,
   onOpen,
   onReady,
-}: Pick<WorldProps, "stops" | "motion" | "active" | "modalOpen" | "onReady" | "onOpen"> & {
+}: Pick<WorldProps, "stops" | "selectedProjects" | "motion" | "active" | "modalOpen" | "onReady" | "onOpen"> & {
   screens: Screen[];
 }) {
   const urls = useMemo(
@@ -182,6 +201,7 @@ function ExhibitionWorld({
         .filter(({ item }) => item.posterAvailable)
         .map(({ item }) => item.posterSrc),
       ...tools.map(({ icon }) => icon),
+      ...Object.values(planetTextures),
     ],
     [screens],
   );
@@ -197,30 +217,39 @@ function ExhibitionWorld({
   const invalidate = useThree((state) => state.invalidate);
   const limit = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
   useLayoutEffect(() => {
-    textures.forEach((texture) => {
-      texture.colorSpace = SRGBColorSpace;
-      texture.anisotropy = Math.min(4, limit);
-      texture.needsUpdate = true;
-    });
+    textures.forEach((texture) => configureTexture(texture, Math.min(4, limit)));
     invalidate();
     return () => textures.forEach((texture) => texture.dispose());
   }, [textures, invalidate, limit]);
   useEffect(onReady, [onReady]);
   return (
     <>
-      <Hall stops={stops} screens={screens} motion={motion} iconMaps={maps} />
-      {screens.map((screen) => (
-        <MediaScreen
-          key={screen.index}
-          screen={screen}
-          poster={maps[screen.item.posterSrc]}
-          interactive={
-            !modalOpen &&
-            (active === screen.index || (active === 0 && screen.reel))
-          }
-          onOpen={onOpen}
-        />
-      ))}
+      <Hall stops={stops} screens={screens} motion={motion} maps={maps} active={active} />
+      {screens.map((screen) => {
+        const stop = stops[screen.index];
+        const item = stop.kind === "media"
+          ? stop.items[selectedProjects[stop.id] ?? 0] ?? screen.item
+          : screen.item;
+        const focused = active === screen.index || (active === 0 && screen.reel);
+        const props = {
+          screen: { ...screen, item },
+          focused,
+          interactive: !modalOpen && focused,
+          onOpen,
+        };
+        const poster = maps[item.posterSrc];
+        if (poster || !item.posterAvailable) {
+          return <MediaScreen key={item.id} {...props} poster={poster} />;
+        }
+        return (
+          <Suspense
+            key={item.id}
+            fallback={<MediaScreen {...props} poster={undefined} interactive={false} />}
+          >
+            <LoadedMediaScreen {...props} />
+          </Suspense>
+        );
+      })}
     </>
   );
 }
@@ -247,6 +276,7 @@ export default function WorldCanvas(props: WorldProps) {
             <ExhibitionWorld
               screens={screens}
               stops={props.stops}
+              selectedProjects={props.selectedProjects}
               motion={props.motion}
               active={props.active}
               modalOpen={props.modalOpen}

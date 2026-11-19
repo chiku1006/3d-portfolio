@@ -1,8 +1,13 @@
+export const spaceBackground = "#050812";
+
 export const worldVertex = /* glsl */ `
   varying vec2 vUv;
+  varying float vViewDepth;
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 view = modelViewMatrix * vec4(position, 1.0);
+    vViewDepth = -view.z;
+    gl_Position = projectionMatrix * view;
   }
 `;
 
@@ -12,7 +17,10 @@ export const screenFragment = /* glsl */ `
   uniform vec2 uPosterCrop;
   uniform vec2 uVideoCrop;
   uniform float uVideoMix;
+  uniform vec3 uSpace;
+  uniform float uFocus;
   varying vec2 vUv;
+  varying float vViewDepth;
 
   void main() {
     vec2 posterUv = (vUv - 0.5) * uPosterCrop + 0.5;
@@ -29,7 +37,8 @@ export const screenFragment = /* glsl */ `
     }
     float vignette = smoothstep(0.27, 0.75, length(vUv - 0.5));
     colour *= 1.0 - vignette * 0.22;
-    gl_FragColor = vec4(colour, 1.0);
+    float haze = (1.0 - uFocus) * smoothstep(29.0, 56.0, vViewDepth);
+    gl_FragColor = vec4(mix(colour, uSpace, haze), 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -71,62 +80,58 @@ export const starsFragment = /* glsl */ `
 `;
 
 export const planetVertex = /* glsl */ `
-  varying vec3 vSurface;
+  varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vView;
 
   void main() {
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    vSurface = normal;
-    vNormal = mat3(modelMatrix) * normal;
-    vView = cameraPosition - world.xyz;
-    gl_Position = projectionMatrix * viewMatrix * world;
+    vec4 view = modelViewMatrix * vec4(position, 1.0);
+    vUv = uv;
+    vNormal = normalMatrix * normal;
+    vView = -view.xyz;
+    gl_Position = projectionMatrix * view;
   }
 `;
 
 export const planetFragment = /* glsl */ `
-  uniform vec3 uNight;
-  uniform vec3 uDay;
+  uniform sampler2D uSurface;
   uniform vec3 uRim;
   uniform vec3 uSun;
-  uniform float uBands;
+  uniform float uExposure;
   uniform float uPresence;
-  varying vec3 vSurface;
+  varying vec2 vUv;
   varying vec3 vNormal;
   varying vec3 vView;
 
-  float hash(vec3 p) {
-    p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
-    p *= 17.0;
-    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  void main() {
+    vec3 n = normalize(vNormal);
+    float facing = max(dot(n, normalize(vView)), 0.0);
+    float sunlight = dot(n, mat3(viewMatrix) * uSun);
+    float day = smoothstep(-0.11, 0.2, sunlight) * (0.44 + 0.56 * max(sunlight, 0.0));
+    float rim = pow(1.0 - facing, 4.2) * (0.014 + 0.24 * smoothstep(-0.21, 0.81, sunlight));
+    vec3 surface = texture2D(uSurface, vUv).rgb;
+    vec3 colour = vec3(0.003, 0.005, 0.01) + surface * (0.012 + day * uExposure) + uRim * rim;
+    gl_FragColor = vec4(colour, uPresence);
+    #include <colorspace_fragment>
   }
+`;
 
-  float noise(vec3 p) {
-    vec3 cell = floor(p);
-    vec3 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(mix(hash(cell), hash(cell + vec3(1,0,0)), f.x),
-          mix(hash(cell + vec3(0,1,0)), hash(cell + vec3(1,1,0)), f.x), f.y),
-      mix(mix(hash(cell + vec3(0,0,1)), hash(cell + vec3(1,0,1)), f.x),
-          mix(hash(cell + vec3(0,1,1)), hash(cell + vec3(1,1,1)), f.x), f.y), f.z);
-  }
+export const cloudsFragment = /* glsl */ `
+  uniform sampler2D uClouds;
+  uniform vec3 uSun;
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vView;
 
   void main() {
     vec3 n = normalize(vNormal);
-    vec3 surface = normalize(vSurface);
-    float sunlight = dot(n, uSun);
-    float day = smoothstep(-0.24, 0.88, sunlight);
+    float sunlight = dot(n, mat3(viewMatrix) * uSun);
+    float day = smoothstep(-0.11, 0.53, sunlight);
     float facing = max(dot(n, normalize(vView)), 0.0);
-    float shape = noise(surface * 4.3 + 12.0);
-    float detail = noise(surface * 12.0 + shape * 2.5);
-    float grain = noise(surface * 37.0 + detail * 1.7);
-    float clouds = smoothstep(0.39, 0.7, shape * 0.6 + detail * 0.3 + grain * 0.16);
-    float bands = 0.5 + 0.5 * sin(surface.y * 31.0 + shape * 4.6 + detail * 0.8);
-    float surfaceLight = mix(0.12 + clouds * 0.72, 0.28 + bands * 0.38 + detail * 0.27, uBands);
-    float rim = pow(1.0 - facing, 3.6) * (0.07 + 0.72 * smoothstep(-0.45, 0.83, sunlight));
-    vec3 colour = uNight + uDay * day * surfaceLight + uRim * rim;
-    gl_FragColor = vec4(colour, uPresence);
+    float cloud = texture2D(uClouds, vUv).r;
+    float density = smoothstep(0.04, 0.67, cloud);
+    vec3 colour = mix(vec3(0.02, 0.036, 0.06), vec3(0.44, 0.53, 0.62), day);
+    gl_FragColor = vec4(colour, density * smoothstep(0.04, 0.27, facing) * (0.10 + day * 0.70));
     #include <colorspace_fragment>
   }
 `;
@@ -141,34 +146,48 @@ export const atmosphereFragment = /* glsl */ `
   void main() {
     vec3 n = normalize(vNormal);
     float edge = abs(dot(n, normalize(vView)));
-    float lit = smoothstep(-0.6, 0.7, dot(n, uSun));
-    float glow = pow(smoothstep(0.01, 0.33, edge), 2.3) * (0.018 + lit * 0.20);
+    float lit = smoothstep(-0.6, 0.7, dot(n, mat3(viewMatrix) * uSun));
+    float glow = pow(smoothstep(0.01, 0.3, edge), 2.3) * (0.015 + lit * 0.18);
     gl_FragColor = vec4(uRim, glow * uPresence);
     #include <colorspace_fragment>
   }
 `;
 
+export const saturnRingInner = 1.15;
+export const saturnRingOuter = 2.23;
+
 export const ringsVertex = /* glsl */ `
   varying vec3 vLocal;
+  varying vec3 vWorld;
 
   void main() {
     vLocal = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vWorld = world.xyz;
+    gl_Position = projectionMatrix * viewMatrix * world;
   }
 `;
 
 export const ringsFragment = /* glsl */ `
-  uniform vec3 uRing;
+  uniform sampler2D uRingMap;
+  uniform vec3 uSun;
+  uniform vec3 uCenter;
+  uniform float uRadius;
   uniform float uPresence;
   varying vec3 vLocal;
+  varying vec3 vWorld;
 
   void main() {
     float r = length(vLocal.xy);
-    float edge = smoothstep(1.22, 1.31, r) * (1.0 - smoothstep(1.77, 1.98, r));
-    float division = mix(0.09, 1.0, smoothstep(0.012, 0.036, abs(r - 1.62)));
-    float fine = mix(0.65, 0.65 + 0.35 * sin(r * 95.0), 1.0 - smoothstep(0.009, 0.035, fwidth(r)));
-    float light = smoothstep(-0.95, 1.0, dot(normalize(vLocal.xy), vec2(-0.8, 0.6)));
-    gl_FragColor = vec4(uRing, uPresence * edge * division * fine * (0.14 + light * 0.43));
+    float t = (r - ${saturnRingInner}) / (${saturnRingOuter} - ${saturnRingInner});
+    vec4 map = texture2D(uRingMap, vec2(t, 0.5));
+    vec3 toPlanet = (uCenter - vWorld) / uRadius;
+    float sunward = dot(toPlanet, uSun);
+    float rayDistance = length(toPlanet - uSun * sunward);
+    float shadow = step(0.0, sunward) * (1.0 - smoothstep(0.88, 1.04, rayDistance));
+    vec3 tint = mix(vec3(0.17, 0.145, 0.11), map.rgb, 0.76);
+    float edge = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.92, 1.0, t));
+    gl_FragColor = vec4(tint * (0.92 - shadow * 0.80), map.a * edge * uPresence);
     #include <colorspace_fragment>
   }
 `;

@@ -1,0 +1,5 @@
+Planet and ring maps by Solar System Scope (INOVE), based on NASA imagery.
+Source: https://www.solarsystemscope.com/textures/
+License: Creative Commons Attribution 4.0 International (https://creativecommons.org/licenses/by/4.0/)
+Earth, Earth clouds, Saturn, and Jupiter maps have been resized and converted to WebP.
+The Saturn ring image is used as supplied. The site applies its own lighting and shaders.

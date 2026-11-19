@@ -67,6 +67,9 @@ html:has(.exhibition[data-spatial]) {
   font-size: 13px;
   transition: color 180ms ease;
 }
+.nav-label-short {
+  display: none;
+}
 .exhibit-nav a[aria-current],
 .exhibit-nav a:hover {
   color: var(--foreground);
@@ -164,7 +167,7 @@ html:has(.exhibition[data-spatial]) {
 [data-spatial] .exhibit-stop[data-active] > .station-body {
   opacity: 1;
 }
-[data-spatial] .exhibit-stop[data-active] :is(a, button, [data-reading]) {
+[data-spatial] .exhibit-stop[data-active] :is(a, button, select, [data-reading]) {
   pointer-events: auto;
 }
 [data-spatial] .exhibit-poster {
@@ -380,32 +383,29 @@ html:has(.exhibition[data-spatial]) {
 .media-number {
   color: #8397ab;
 }
-.film-index {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: clamp(15px, 2.5vw, 32px);
-}
-.film-index a {
+.project-picker {
   display: grid;
-  align-items: center;
-  justify-content: center;
-  min-width: 37px;
-  min-height: 37px;
+  justify-items: start;
+  gap: 7px;
+  margin-top: clamp(16px, 2.3vw, 29px);
+  color: #b4c0d0;
+  font-size: 12px;
+}
+.project-picker select {
+  width: min(100%, 290px);
+  min-height: 38px;
+  padding: 5px 10px;
   border: 1px solid var(--hairline);
   border-radius: 3px;
-  background: rgb(7 9 16 / 58%);
-  color: var(--muted);
-  font:
-    11px/1 ui-monospace,
-    monospace;
+  background: #0d1622;
+  color: #e3edf7;
+  color-scheme: dark;
+  font-size: 13px;
+  cursor: pointer;
 }
-.film-index a:hover,
-.film-index a[aria-current] {
-  background: rgb(28 83 109 / 55%);
+.project-picker select:hover,
+.project-picker select:focus-visible {
   border-color: #779fb5;
-  color: var(--accent);
 }
 [data-spatial] .media-layout {
   grid-template-columns: minmax(0, 0.35fr) minmax(0, 0.65fr);
@@ -732,12 +732,9 @@ html:has(.exhibition[data-spatial]) {
   [data-spatial] .media-copy h2 + .exhibit-button {
     margin-top: 12px;
   }
-  [data-spatial] .film-index {
-    margin-top: 8px;
-  }
-  .film-index a {
-    min-width: 35px;
-    min-height: 35px;
+  [data-spatial] .project-picker {
+    margin-top: 9px;
+    gap: 4px;
   }
   .bio-layout h2,
   .finale-copy h2 {
@@ -808,6 +805,21 @@ html:has(.exhibition[data-spatial]) {
   }
 }
 
+@media (max-width: 580px) {
+  .exhibit-header {
+    gap: 6px;
+  }
+  .exhibit-nav {
+    gap: clamp(5px, 1.6vw, 8px);
+  }
+  .nav-label-full {
+    display: none;
+  }
+  .nav-label-short {
+    display: inline;
+  }
+}
+
 @media (max-width: 365px) {
   .exhibition {
     --edge: 16px;
@@ -816,17 +828,17 @@ html:has(.exhibition[data-spatial]) {
     font-size: 29px;
   }
   .exhibit-header {
-    gap: 8px;
+    gap: 5px;
   }
   .exhibit-nav {
-    gap: 9px;
+    gap: 5px;
   }
   .exhibit-nav a,
   .exhibit-mode {
     font-size: 10px;
   }
   .exhibit-mode {
-    padding-inline: 6px;
+    padding-inline: 5px;
   }
   .exhibit-button {
     padding-inline: 9px;

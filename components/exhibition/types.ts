@@ -8,15 +8,21 @@ export type ExhibitMedia = GalleryMedia & {
   duration?: number;
 };
 
-export type Stop = {
+type Station = {
   id: string;
   chapter: number;
-  label: string;
-  kind: "arrival" | "media" | "bio" | "tools" | "contact";
-  item?: ExhibitMedia;
-  side?: 1 | -1;
+};
+
+export type MediaStop = Station & {
+  kind: "media";
+  items: ExhibitMedia[];
+  side: 1 | -1;
   portrait?: boolean;
 };
+
+export type Stop =
+  | MediaStop
+  | (Station & { kind: "arrival" | "bio" | "tools" | "contact" });
 
 export type TourMotion = {
   progress: number;
@@ -30,7 +36,7 @@ export const chapters = [
   { id: "home", label: "Arrival" },
   { id: "showreel", label: "Showreel" },
   { id: "work", label: "Motion graphics" },
-  { id: "short-form", label: "Short-form editing" },
+  { id: "short-form", label: "Video edits" },
   { id: "info", label: "About" },
   { id: "hire", label: "Contact" },
 ] as const;

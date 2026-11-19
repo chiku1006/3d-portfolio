@@ -30,10 +30,11 @@ const spatialPreference =
 const finePointer = "(hover: hover) and (pointer: fine)";
 const links = [
   { label: "Home", id: "home", chapter: 0 },
-  { label: "My Work", id: "work", chapter: 2 },
+  { label: "Motion Graphics", short: "Motion", id: "work", chapter: 2 },
+  { label: "Video Edits", short: "Edits", id: "short-form", chapter: 3 },
   { label: "Info", id: "info", chapter: 4 },
   { label: "Hire Me", id: "hire", chapter: 5 },
-];
+] as const;
 
 function InquiryDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -85,6 +86,9 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     modal: false,
   });
   const [active, setActive] = useState(0);
+  const [selectedProjects, setSelectedProjects] = useState<Record<string, number>>(
+    {},
+  );
   const [permitted, setPermitted] = useState(false);
   const [ready, setReady] = useState(false);
   const [flat, setFlat] = useState(false);
@@ -171,9 +175,32 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       update(trigger.start + cursor.position * (trigger.end - trigger.start)),
     );
 
+    function resolveProjectLink(fragment: string) {
+      if (!fragment || stops.some((stop) => stop.id === fragment)) return;
+      for (const stop of stops) {
+        if (stop.kind !== "media") continue;
+        const index = stop.items.findIndex((item) => item.id === fragment);
+        if (index < 0) continue;
+        setSelectedProjects((current) =>
+          current[stop.id] === index
+            ? current
+            : { ...current, [stop.id]: index },
+        );
+        return stop.id;
+      }
+    }
+    function onHashChange() {
+      const id = resolveProjectLink(window.location.hash.slice(1));
+      if (id)
+        document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
+    }
+    window.addEventListener("hashchange", onHashChange);
     const frame = requestAnimationFrame(() => {
       const fragment = window.location.hash.slice(1);
-      const id = restoreStop.current ?? (spatial ? fragment : null);
+      const id =
+        restoreStop.current ??
+        resolveProjectLink(fragment) ??
+        (spatial ? fragment : null);
       restoreStop.current = null;
       if (id)
         document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
@@ -181,6 +208,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       update(window.scrollY);
     });
     return () => {
+      window.removeEventListener("hashchange", onHashChange);
       cancelAnimationFrame(frame);
       trigger.kill();
       tween.kill();
@@ -259,7 +287,8 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   }
 
   const current = stops[active] ?? stops[0];
-  const showreel = stops.find((stop) => stop.chapter === 1)?.item;
+  const reelStop = stops.find((stop) => stop.chapter === 1);
+  const showreel = reelStop?.kind === "media" ? reelStop.items[0] : undefined;
   return (
     <div className="exhibition" data-spatial={spatial || undefined}>
       <header className="exhibit-header">
@@ -278,20 +307,27 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
           </span>
         </a>
         <nav className="exhibit-nav" aria-label="Main navigation">
-          {links.map(({ label, id, chapter }) => (
+          {links.map((link) => (
             <a
-              key={id}
-              href={"#" + id}
+              key={link.id}
+              href={"#" + link.id}
+              aria-label={link.label}
               aria-current={
-                current.chapter === chapter ||
-                (chapter === 0 && current.chapter === 1) ||
-                (chapter === 2 && current.chapter === 3)
+                current.chapter === link.chapter ||
+                (link.chapter === 0 && current.chapter === 1)
                   ? "location"
                   : undefined
               }
             >
-              {label}
-              {chapter === 5 && <ArrowDownRight size={14} />}
+              {"short" in link ? (
+                <>
+                  <span className="nav-label-full">{link.label}</span>
+                  <span className="nav-label-short">{link.short}</span>
+                </>
+              ) : (
+                link.label
+              )}
+              {link.chapter === 5 && <ArrowDownRight size={14} />}
             </a>
           ))}
         </nav>
@@ -313,6 +349,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       {showWorld && (
         <World
           stops={stops}
+          selectedProjects={selectedProjects}
           motion={tour}
           frameRequestRef={invalidate}
           onReady={onReady}
@@ -339,13 +376,22 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
               {stop.kind === "arrival" && showreel && (
                 <Arrival item={showreel} onOpen={openVideo} />
               )}
-              {stop.kind === "media" && stop.item && (
+              {stop.kind === "media" && stop.items.length > 0 && (
                 <MediaContent
-                  stop={{ ...stop, item: stop.item }}
+                  stop={stop}
+                  selected={selectedProjects[stop.id] ?? 0}
                   onOpen={openVideo}
-                  related={stops.filter(
-                    (entry) => entry.chapter === stop.chapter,
-                  )}
+                  onSelect={(index) => {
+                    setSelectedProjects((previous) => ({
+                      ...previous,
+                      [stop.id]: index,
+                    }));
+                    window.history.replaceState(
+                      window.history.state,
+                      "",
+                      "#" + stop.items[index].id,
+                    );
+                  }}
                 />
               )}
               {stop.kind === "bio" && <Bio />}

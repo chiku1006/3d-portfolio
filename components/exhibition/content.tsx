@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Play } from "lucide-react";
 import Image from "next/image";
 import { contact, socialProfiles } from "@/src/data/site";
-import type { ExhibitMedia, Stop } from "./types";
+import type { ExhibitMedia, MediaStop } from "./types";
 import type { MouseEvent, ReactNode } from "react";
 
 export const tools = [
@@ -127,16 +127,17 @@ export function Arrival({
 
 export function MediaContent({
   stop,
+  selected,
   onOpen,
-  related,
+  onSelect,
 }: {
-  stop: Stop & { item: ExhibitMedia };
+  stop: MediaStop;
+  selected: number;
   onOpen: OpenVideo;
-  related: Stop[];
+  onSelect: (index: number) => void;
 }) {
-  const item = stop.item;
+  const item = stop.items[selected];
   const [title, subtitle] = item.title.split(" — ", 2);
-  const number = related.findIndex((entry) => entry.id === stop.id) + 1;
   const stamp =
     item.duration === undefined
       ? null
@@ -153,10 +154,10 @@ export function MediaContent({
         <p className="exhibit-kicker">
           {stop.chapter === 1 ? "★ " : ""}
           {item.category}
-          {related.length > 1 && (
+          {stop.items.length > 1 && (
             <span className="media-number">
-              {String(number).padStart(2, "0")} /{" "}
-              {String(related.length).padStart(2, "0")}
+              {String(selected + 1).padStart(2, "0")} /{" "}
+              {String(stop.items.length).padStart(2, "0")}
             </span>
           )}
         </p>
@@ -176,19 +177,20 @@ export function MediaContent({
           {stop.chapter === 1 ? "showreel" : "film"}
           {stamp && <span className="media-time">{stamp}</span>}
         </MediaLink>
-        {related.length > 1 && (
-          <nav className="film-index" aria-label="Motion graphics projects">
-            {related.map((entry, index) => (
-              <a
-                key={entry.id}
-                href={"#" + entry.id}
-                aria-current={entry.id === stop.id ? "location" : undefined}
-                aria-label={entry.label}
-              >
-                {String(index + 1).padStart(2, "0")}
-              </a>
-            ))}
-          </nav>
+        {stop.items.length > 1 && (
+          <label className="project-picker">
+            <span>Browse projects</span>
+            <select
+              value={selected}
+              onChange={(event) => onSelect(Number(event.currentTarget.value))}
+            >
+              {stop.items.map((entry, index) => (
+                <option key={entry.id} value={index}>
+                  {entry.title}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
       </div>
       <Poster item={item} onOpen={onOpen} portrait={stop.portrait} />

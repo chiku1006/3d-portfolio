@@ -3,6 +3,7 @@
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Color,
   MathUtils,
   SRGBColorSpace,
   Vector2,
@@ -13,7 +14,7 @@ import {
 } from "three";
 import type { ExhibitMedia } from "./types";
 import type { Screen } from "./world-layout";
-import { screenFragment, worldVertex } from "./shaders";
+import { screenFragment, spaceBackground, worldVertex } from "./shaders";
 
 const hoverQuery = "(hover: hover) and (pointer: fine)";
 
@@ -40,11 +41,13 @@ function release(preview: Preview) {
 export function MediaScreen({
   screen,
   poster,
+  focused,
   interactive,
   onOpen,
 }: {
   screen: Screen;
   poster: Texture | undefined;
+  focused: boolean;
   interactive: boolean;
   onOpen: (item: ExhibitMedia) => void;
 }) {
@@ -66,6 +69,8 @@ export function MediaScreen({
       },
       uVideoCrop: { value: new Vector2(1, 1) },
       uVideoMix: { value: 0 },
+      uSpace: { value: new Color(spaceBackground) },
+      uFocus: { value: 0 },
     }),
     [poster, aspect, image],
   );
@@ -174,9 +179,12 @@ export function MediaScreen({
       dt,
     );
     current.uniforms.uVideoMix.value = blend;
+    const focus = MathUtils.damp(current.uniforms.uFocus.value, Number(focused), 16, dt);
+    current.uniforms.uFocus.value = focus;
     if (!previewActive && preview && blend < 0.012) dispose();
     if (
       Math.abs(blend - target) > 0.003 ||
+      Math.abs(focus - Number(focused)) > 0.003 ||
       (previewActive &&
         preview?.ready &&
         !preview.clip.requestVideoFrameCallback)

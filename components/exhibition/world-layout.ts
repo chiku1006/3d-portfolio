@@ -23,15 +23,15 @@ export function depth(index: number) {
 
 export function layoutScreens(stops: Stop[]) {
   return stops.flatMap((stop, index): Screen[] => {
-    if (!stop.item) return [];
-    const side = stop.side ?? 1;
+    if (stop.kind !== "media" || !stop.items[0]) return [];
+    const side = stop.side;
     const reel = stop.chapter === 1;
     const portrait = Boolean(stop.portrait);
     const width = portrait ? 3.8 : reel ? 10.8 : 9.3;
     return [
       {
         index,
-        item: stop.item,
+        item: stop.items[0],
         x: side * (portrait ? 3.4 : reel ? 4.25 : 4.7),
         y: portrait ? 0.45 : 0.5 + ((index % 3) - 1) * 0.28,
         z: depth(index),
@@ -54,8 +54,14 @@ export type Pose = {
   lookY: number;
 };
 
-export function layoutCamera(stops: Stop[], screens: Screen[], aspect: number) {
+export function layoutCamera(
+  stops: Stop[],
+  screens: Screen[],
+  aspect: number,
+  height: number,
+) {
   const compact = aspect < 1.06;
+  const tight = compact ? Math.min(1, Math.max(0, (680 - height) / 120)) : 0;
   return stops.map((stop, index): Pose => {
     const arrival = stop.kind === "arrival";
     const surface = screens.find(
@@ -74,7 +80,7 @@ export function layoutCamera(stops: Stop[], screens: Screen[], aspect: number) {
     }
 
     const widthFraction = compact
-      ? 0.9
+      ? 0.9 - (arrival ? 0 : 0.08 * tight)
       : arrival
         ? 0.48
         : surface.reel
@@ -84,8 +90,8 @@ export function layoutCamera(stops: Stop[], screens: Screen[], aspect: number) {
       ? arrival
         ? 0.41
         : surface.portrait
-          ? 0.47
-          : 0.44
+          ? 0.47 - 0.16 * tight
+          : 0.44 - 0.19 * tight
       : 0.69;
     const distance = Math.max(
       surface.width / (2 * tangent * aspect * widthFraction),
@@ -100,13 +106,10 @@ export function layoutCamera(stops: Stop[], screens: Screen[], aspect: number) {
           aspect *
           surface.side *
           (arrival ? 0.41 : surface.reel ? 0.24 : 0.34));
-    const y =
-      surface.y +
-      (compact
-        ? (arrival ? 0.32 : surface.portrait ? -0.235 : -0.19) *
-          distance *
-          tangent
-        : 0);
+    const rise = arrival ? 0.32 : surface.portrait
+      ? -0.235 - 0.22 * tight
+      : -0.19 - 0.3 * tight;
+    const y = surface.y + (compact ? rise * distance * tangent : 0);
     return { x, y, z: surface.z + distance, lookX: x, lookY: y };
   });
 }
@@ -118,12 +121,26 @@ export type PlanetPlacement = {
   stop: number;
 };
 
+export function layoutSpacecraft(pose: Pose, aspect: number, height: number) {
+  const compact = aspect < 1.06;
+  const short = compact && height < 650;
+  const distance = compact ? 15 : 16;
+  const position: [number, number, number] = [
+    pose.x + distance * tangent * aspect * (short ? 0.73 : compact ? 0.26 : 0.35),
+    pose.y + distance * tangent * (compact ? 0.20 : 0.62),
+    pose.z - distance,
+  ];
+  return { position, scale: short ? 0.37 : compact ? 0.48 : 0.57 };
+}
+
 export function layoutPlanets(
   stops: Stop[],
   poses: Pose[],
   aspect: number,
+  height: number,
 ): PlanetPlacement[] {
   const compact = aspect < 1.06;
+  const short = compact && height < 650;
   return stops.flatMap((stop, index): PlanetPlacement[] => {
     const pose = poses[index];
     if (stop.kind === "arrival") {
@@ -142,7 +159,7 @@ export function layoutPlanets(
         },
       ];
     }
-    if (stop.item?.id === "motion-01") {
+    if (stop.id === "work") {
       const distance = compact ? 12 : 10.8;
       const left = pose.x - distance * tangent * aspect * 0.89;
       return [
@@ -150,10 +167,10 @@ export function layoutPlanets(
           kind: "flow",
           position: [
             compact ? left : Math.min(-4.8, left),
-            pose.y + distance * tangent * 0.66,
+            pose.y + distance * tangent * (short ? 0.80 : 0.73),
             pose.z - distance,
           ],
-          radius: Math.min(compact ? 0.89 : 1, distance * tangent * aspect * 0.53),
+          radius: Math.min(short ? 0.62 : compact ? 0.89 : 1, distance * tangent * aspect * 0.53),
           stop: index,
         },
       ];

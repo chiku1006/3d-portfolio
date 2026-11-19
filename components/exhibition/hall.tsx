@@ -15,41 +15,63 @@ import {
 import { tools } from "./content";
 import {
   atmosphereFragment,
+  cloudsFragment,
   planetFragment,
   planetVertex,
   ringsFragment,
   ringsVertex,
+  saturnRingInner,
+  saturnRingOuter,
+  spaceBackground,
   starsFragment,
   starsVertex,
 } from "./shaders";
+import { Spacecraft } from "./spacecraft";
 import {
   depth,
   layoutCamera,
   layoutPlanets,
+  layoutSpacecraft,
   type PlanetPlacement,
   type Screen,
 } from "./world-layout";
 import type { Stop, TourMotion } from "./types";
 
-const space = "#050812";
+export const planetTextures = {
+  earth: "/textures/planets/earth.webp",
+  clouds: "/textures/planets/earth-clouds.webp",
+  saturn: "/textures/planets/saturn.webp",
+  rings: "/textures/planets/2k_saturn_ring_alpha.png",
+  jupiter: "/textures/planets/jupiter.webp",
+} as const;
+
 const planetLighting = {
   arrival: {
-    night: "#090e1b",
-    day: "#3c5b7e",
-    rim: "#77b9f4",
-    sun: [-0.73, 0.64, 0.04],
+    map: planetTextures.earth,
+    rim: "#64b7ff",
+    sun: [-0.78, 0.46, 0.45],
+    exposure: 0.67,
+    tilt: [0, 0, 0.19],
+    longitude: -2.43,
+    flattening: 1,
   },
   flow: {
-    night: "#110d20",
-    day: "#6c4e86",
-    rim: "#987bc8",
-    sun: [-0.63, 0.68, 0.34],
+    map: planetTextures.saturn,
+    rim: "#c1a47c",
+    sun: [-0.61, 0.64, 0.46],
+    exposure: 0.42,
+    tilt: [-0.4, 0, -0.29],
+    longitude: 0,
+    flattening: 0.91,
   },
   contact: {
-    night: "#080e1c",
-    day: "#324963",
-    rim: "#5e9aca",
-    sun: [-0.19, 0.95, -0.23],
+    map: planetTextures.jupiter,
+    rim: "#bc9c81",
+    sun: [-0.77, 0.59, 0.21],
+    exposure: 0.40,
+    tilt: [1.23, 0, 0.19],
+    longitude: -1.4,
+    flattening: 0.98,
   },
 } as const;
 
@@ -120,39 +142,44 @@ function Planet({
   radius,
   stop,
   motion,
-}: PlanetPlacement & { motion: RefObject<TourMotion> }) {
+  maps,
+}: PlanetPlacement & { motion: RefObject<TourMotion>; maps: Record<string, Texture> }) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
-  const rings = useRef<Group>(null);
+  const axis = useRef<Group>(null);
   const surfaceMaterial = useRef<ShaderMaterial>(null);
   const atmosphereMaterial = useRef<ShaderMaterial>(null);
   const ringMaterial = useRef<ShaderMaterial>(null);
   const lighting = planetLighting[kind];
+  const saturn = kind === "flow";
   const uniforms = useMemo(
     () => ({
-      uNight: { value: new Color(lighting.night) },
-      uDay: { value: new Color(lighting.day) },
+      uSurface: { value: maps[lighting.map] },
+      uClouds: { value: maps[planetTextures.clouds] },
       uRim: { value: new Color(lighting.rim) },
       uSun: { value: new Vector3(...lighting.sun).normalize() },
-      uBands: { value: Number(kind === "flow") },
+      uExposure: { value: lighting.exposure },
       uPresence: { value: 1 },
     }),
-    [kind, lighting],
+    [lighting, maps],
   );
   const ringUniforms = useMemo(
     () => ({
-      uRing: { value: new Color("#a38ac9") },
+      uRingMap: { value: maps[planetTextures.rings] },
+      uSun: uniforms.uSun,
+      uCenter: { value: new Vector3(...position) },
+      uRadius: { value: radius },
       uPresence: { value: 1 },
     }),
-    [],
+    [maps, position, radius, uniforms],
   );
 
   useFrame(({ camera }) => {
     if (motion.current.modal || document.hidden) return;
     const travel = MathUtils.clamp(motion.current.progress - stop, -2, 2);
-    if (body.current) body.current.rotation.y = travel * 0.2;
-    if (rings.current) rings.current.rotation.z = -0.29 + travel * 0.06;
-    if (kind === "flow" && root.current) {
+    if (body.current) body.current.rotation.y = lighting.longitude + travel * 0.2;
+    if (saturn && axis.current) axis.current.rotation.z = lighting.tilt[2] + travel * 0.06;
+    if (saturn && root.current) {
       const distance = camera.position.distanceTo(root.current.position);
       const presence = 1 - MathUtils.smoothstep(distance, 28, 42);
       for (const material of [surfaceMaterial, atmosphereMaterial, ringMaterial]) {
@@ -164,35 +191,41 @@ function Planet({
 
   return (
     <group ref={root} position={position} scale={radius}>
-      <group ref={body} rotation={[0, 0, 0.19]}>
-        <mesh renderOrder={kind === "flow" ? -0.5 : 0}>
-          <sphereGeometry args={[1, 56, 40]} />
-          <shaderMaterial
-            ref={surfaceMaterial}
-            uniforms={uniforms}
-            vertexShader={planetVertex}
-            fragmentShader={planetFragment}
-            transparent={kind === "flow"}
-          />
-        </mesh>
-        <mesh scale={kind === "contact" ? 1.016 : 1.045}>
-          <sphereGeometry args={[1, 56, 40]} />
-          <shaderMaterial
-            ref={atmosphereMaterial}
-            uniforms={uniforms}
-            vertexShader={planetVertex}
-            fragmentShader={atmosphereFragment}
-            side={BackSide}
-            blending={AdditiveBlending}
-            transparent
-            depthWrite={false}
-          />
-        </mesh>
-      </group>
-      {kind === "flow" && (
-        <group ref={rings}>
-          <mesh rotation={[1.17, 0.12, 0]}>
-            <ringGeometry args={[1.22, 1.98, 80]} />
+      <group ref={axis} rotation={[...lighting.tilt]}>
+        <group ref={body} rotation-y={lighting.longitude} scale={[1, lighting.flattening, 1]}>
+          <mesh renderOrder={saturn ? -0.5 : 0}>
+            <sphereGeometry args={[1, 64, 48]} />
+            <shaderMaterial
+              ref={surfaceMaterial}
+              uniforms={uniforms}
+              vertexShader={planetVertex}
+              fragmentShader={planetFragment}
+              transparent={saturn}
+            />
+          </mesh>
+          {kind === "arrival" && (
+            <mesh scale={1.008} rotation-y={0.09}>
+              <sphereGeometry args={[1, 56, 40]} />
+              <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={cloudsFragment} transparent depthWrite={false} />
+            </mesh>
+          )}
+          <mesh scale={kind === "arrival" ? 1.035 : 1.014}>
+            <sphereGeometry args={[1, 56, 40]} />
+            <shaderMaterial
+              ref={atmosphereMaterial}
+              uniforms={uniforms}
+              vertexShader={planetVertex}
+              fragmentShader={atmosphereFragment}
+              side={BackSide}
+              blending={AdditiveBlending}
+              transparent
+              depthWrite={false}
+            />
+          </mesh>
+        </group>
+        {saturn && (
+          <mesh rotation-x={Math.PI / 2}>
+            <ringGeometry args={[saturnRingInner, saturnRingOuter, 96]} />
             <shaderMaterial
               ref={ringMaterial}
               uniforms={ringUniforms}
@@ -203,8 +236,8 @@ function Planet({
               depthWrite={false}
             />
           </mesh>
-        </group>
-      )}
+        )}
+      </group>
     </group>
   );
 }
@@ -213,32 +246,41 @@ export function Hall({
   stops,
   screens,
   motion,
-  iconMaps,
+  maps,
+  active,
 }: {
   stops: Stop[];
   screens: Screen[];
   motion: RefObject<TourMotion>;
-  iconMaps: Record<string, Texture>;
+  maps: Record<string, Texture>;
+  active: number;
 }) {
-  const aspect = useThree(({ size }) => size.width / Math.max(size.height, 1));
-  const planets = useMemo(
-    () => layoutPlanets(stops, layoutCamera(stops, screens, aspect), aspect),
-    [stops, screens, aspect],
+  const { width, height } = useThree((state) => state.size);
+  const aspect = width / Math.max(height, 1);
+  const poses = useMemo(
+    () => layoutCamera(stops, screens, aspect, height),
+    [stops, screens, aspect, height],
   );
+  const planets = useMemo(
+    () => layoutPlanets(stops, poses, aspect, height),
+    [stops, poses, aspect, height],
+  );
+  const spacecraft = layoutSpacecraft(poses[0], aspect, height);
   const bioDepth = depth(stops.findIndex((stop) => stop.kind === "bio"));
   const toolsDepth = depth(stops.findIndex((stop) => stop.kind === "tools"));
   const endDepth = depth(stops.length - 1);
   return (
     <>
-      <color attach="background" args={[space]} />
-      <fogExp2 attach="fog" args={[space, 0.024]} />
+      <color attach="background" args={[spaceBackground]} />
+      <fogExp2 attach="fog" args={[spaceBackground, 0.024]} />
       <ambientLight intensity={1.3} color="#7f9cb7" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
       <Stars end={endDepth} />
       <Stars end={endDepth} near />
       {planets.map((planet) => (
-        <Planet key={planet.kind} {...planet} motion={motion} />
+        <Planet key={planet.kind} {...planet} motion={motion} maps={maps} />
       ))}
+      <Spacecraft {...spacecraft} nearby={active < 2} motion={motion} />
       <Text
         font="/fonts/InstrumentSerif-Italic.ttf"
         fontSize={9.8}
@@ -276,7 +318,7 @@ export function Hall({
             <mesh position={[0, 0, 0.09]}>
               <planeGeometry args={[0.69, 0.69]} />
               <meshBasicMaterial
-                map={iconMaps[icon]}
+                map={maps[icon]}
                 transparent
                 toneMapped={false}
               />
