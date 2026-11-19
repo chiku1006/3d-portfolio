@@ -168,11 +168,12 @@ function CameraPath({
 function ExhibitionWorld({
   screens,
   stops,
+  motion,
   active,
   modalOpen,
   onOpen,
   onReady,
-}: Pick<WorldProps, "stops" | "active" | "modalOpen" | "onReady" | "onOpen"> & {
+}: Pick<WorldProps, "stops" | "motion" | "active" | "modalOpen" | "onReady" | "onOpen"> & {
   screens: Screen[];
 }) {
   const urls = useMemo(
@@ -207,7 +208,7 @@ function ExhibitionWorld({
   useEffect(onReady, [onReady]);
   return (
     <>
-      <Hall stops={stops} iconMaps={maps} />
+      <Hall stops={stops} screens={screens} motion={motion} iconMaps={maps} />
       {screens.map((screen) => (
         <MediaScreen
           key={screen.index}
@@ -246,6 +247,7 @@ export default function WorldCanvas(props: WorldProps) {
             <ExhibitionWorld
               screens={screens}
               stops={props.stops}
+              motion={props.motion}
               active={props.active}
               modalOpen={props.modalOpen}
               onOpen={props.onOpen}

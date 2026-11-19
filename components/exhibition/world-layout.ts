@@ -14,7 +14,6 @@ export type Screen = {
   reel: boolean;
 };
 
-export const floor = -3.8;
 export const fieldOfView = 46;
 const tangent = Math.tan((fieldOfView * Math.PI) / 360);
 
@@ -109,5 +108,66 @@ export function layoutCamera(stops: Stop[], screens: Screen[], aspect: number) {
           tangent
         : 0);
     return { x, y, z: surface.z + distance, lookX: x, lookY: y };
+  });
+}
+
+export type PlanetPlacement = {
+  kind: "arrival" | "flow" | "contact";
+  position: [number, number, number];
+  radius: number;
+  stop: number;
+};
+
+export function layoutPlanets(
+  stops: Stop[],
+  poses: Pose[],
+  aspect: number,
+): PlanetPlacement[] {
+  const compact = aspect < 1.06;
+  return stops.flatMap((stop, index): PlanetPlacement[] => {
+    const pose = poses[index];
+    if (stop.kind === "arrival") {
+      const behindScreen = depth(1) - 8;
+      const distance = pose.z - behindScreen;
+      return [
+        {
+          kind: "arrival",
+          position: [
+            pose.x + distance * tangent * aspect * (compact ? 1.17 : 0.89),
+            pose.y + distance * tangent * (compact ? 0.68 : 0.79),
+            behindScreen,
+          ],
+          radius: compact ? distance * 0.109 : 4.3,
+          stop: index,
+        },
+      ];
+    }
+    if (stop.item?.id === "motion-01") {
+      const distance = compact ? 12 : 10.8;
+      const left = pose.x - distance * tangent * aspect * 0.89;
+      return [
+        {
+          kind: "flow",
+          position: [
+            compact ? left : Math.min(-4.8, left),
+            pose.y + distance * tangent * 0.66,
+            pose.z - distance,
+          ],
+          radius: Math.min(compact ? 0.89 : 1, distance * tangent * aspect * 0.53),
+          stop: index,
+        },
+      ];
+    }
+    if (stop.kind === "contact") {
+      return [
+        {
+          kind: "contact",
+          position: [7, pose.y - 78, pose.z - 77],
+          radius: 57,
+          stop: index,
+        },
+      ];
+    }
+    return [];
   });
 }

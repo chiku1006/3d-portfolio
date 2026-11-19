@@ -1,164 +1,244 @@
 import { Text } from "@react-three/drei";
-import { useMemo } from "react";
-import { Color, type Texture } from "three";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useMemo, useRef, type RefObject } from "react";
+import {
+  AdditiveBlending,
+  BackSide,
+  Color,
+  DoubleSide,
+  MathUtils,
+  Vector3,
+  type Group,
+  type ShaderMaterial,
+  type Texture,
+} from "three";
 import { tools } from "./content";
-import { auraFragment, floorFragment, worldVertex } from "./shaders";
-import { depth, floor } from "./world-layout";
-import type { Stop } from "./types";
+import {
+  atmosphereFragment,
+  planetFragment,
+  planetVertex,
+  ringsFragment,
+  ringsVertex,
+  starsFragment,
+  starsVertex,
+} from "./shaders";
+import {
+  depth,
+  layoutCamera,
+  layoutPlanets,
+  type PlanetPlacement,
+  type Screen,
+} from "./world-layout";
+import type { Stop, TourMotion } from "./types";
 
-function buildRails(end: number) {
-  const sections: number[] = [];
-  const runners: number[] = [];
-  const profile = [
-    [-16, floor],
-    [-16, 3.7],
-    [-12.9, 6.8],
-    [12.9, 6.8],
-    [16, 3.7],
-    [16, floor],
-  ];
-  for (let z = 15; z >= end; z -= 6) {
-    for (let i = 1; i < profile.length; i++) {
-      const [x1, y1] = profile[i - 1];
-      const [x2, y2] = profile[i];
-      sections.push(x1, y1, z, x2, y2, z);
+const space = "#050812";
+const planetLighting = {
+  arrival: {
+    night: "#090e1b",
+    day: "#3c5b7e",
+    rim: "#77b9f4",
+    sun: [-0.73, 0.64, 0.04],
+  },
+  flow: {
+    night: "#110d20",
+    day: "#6c4e86",
+    rim: "#987bc8",
+    sun: [-0.63, 0.68, 0.34],
+  },
+  contact: {
+    night: "#080e1c",
+    day: "#324963",
+    rim: "#5e9aca",
+    sun: [-0.19, 0.95, -0.23],
+  },
+} as const;
+
+function scatterStars(near: boolean, end: number) {
+  const count = near ? 630 : 1900;
+  const positions = new Float32Array(count * 3);
+  const appearance = new Float32Array(count * 2);
+  let seed = near ? 171 : 41;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < count; i++) {
+    if (near) {
+      const sign = random() < 0.5 ? -1 : 1;
+      positions[i * 3] = sign * MathUtils.lerp(2.2, 30, random());
+      positions[i * 3 + 1] = MathUtils.lerp(-14, 16, random());
+      positions[i * 3 + 2] = MathUtils.lerp(26, end - 85, random());
+    } else {
+      // A fixed shell well beyond the tour keeps translation parallax small.
+      const forward = MathUtils.lerp(0.33, 1, random());
+      const angle = random() * Math.PI * 2;
+      const distance = MathUtils.lerp(3900, 5100, random());
+      const lateral = Math.sqrt(1 - forward * forward) * distance;
+      positions[i * 3] = Math.cos(angle) * lateral;
+      positions[i * 3 + 1] = Math.sin(angle) * lateral;
+      positions[i * 3 + 2] = end * 0.5 - forward * distance;
     }
-    for (const sign of [-1, 1]) {
-      const x = sign * 8.7;
-      sections.push(x - 0.2, floor + 0.012, z, x + 0.2, floor + 0.012, z);
-      const wall = sign * 16;
-      sections.push(wall, -1.8, z, wall, -0.8, z);
-    }
+    appearance[i * 2] = random() ** 2.8;
+    appearance[i * 2 + 1] = random() ** 2;
   }
-  for (const [x, y] of [
-    ...profile,
-    [-8.7, floor + 0.016],
-    [8.7, floor + 0.016],
-  ]) {
-    runners.push(x, y, 20, x, y, end);
-  }
-  return [new Float32Array(sections), new Float32Array(runners)] as const;
+  return { positions, appearance };
 }
 
-function Segments({
-  positions,
-  color,
-  opacity,
-}: {
-  positions: Float32Array;
-  color: string;
-  opacity: number;
-}) {
+function Stars({ near = false, end }: { near?: boolean; end: number }) {
+  const dpr = useThree((state) => state.viewport.dpr);
+  const { positions, appearance } = useMemo(
+    () => scatterStars(near, end),
+    [near, end],
+  );
+  const uniforms = useMemo(
+    () => ({ uDpr: { value: dpr }, uNearLayer: { value: Number(near) } }),
+    [dpr, near],
+  );
   return (
-    <lineSegments>
+    <points frustumCulled={near} renderOrder={near ? 1 : -1}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute
+          attach="attributes-aAppearance"
+          args={[appearance, 2]}
+        />
       </bufferGeometry>
-      <lineBasicMaterial
-        color={color}
-        opacity={opacity}
-        transparent
-        depthWrite={false}
-      />
-    </lineSegments>
-  );
-}
-
-function Halo({
-  pos,
-  size,
-  color,
-}: {
-  pos: [number, number, number];
-  size: [number, number];
-  color: string;
-}) {
-  const uniforms = useMemo(
-    () => ({ uTint: { value: new Color(color) } }),
-    [color],
-  );
-  return (
-    <mesh position={pos}>
-      <planeGeometry args={size} />
       <shaderMaterial
         uniforms={uniforms}
-        vertexShader={worldVertex}
-        fragmentShader={auraFragment}
+        vertexShader={starsVertex}
+        fragmentShader={starsFragment}
         transparent
         depthWrite={false}
       />
-    </mesh>
+    </points>
   );
 }
 
-function Portal({
-  at,
-  scale = 1,
-  light = "#6ed3ec",
-}: {
-  at: number;
-  scale?: number;
-  light?: string;
-}) {
-  const geometry = useMemo(() => {
-    const outline = [
-      [-12.8, floor],
-      [-12.8, 4.6],
-      [-10.8, 6.6],
-      [10.8, 6.6],
-      [12.8, 4.6],
-      [12.8, floor],
-    ];
-    const shape: number[] = [];
-    for (let i = 1; i < outline.length; i++) {
-      const [x1, y1] = outline[i - 1];
-      const [x2, y2] = outline[i];
-      shape.push(x1 * scale, y1, at, x2 * scale, y2, at);
+function Planet({
+  kind,
+  position,
+  radius,
+  stop,
+  motion,
+}: PlanetPlacement & { motion: RefObject<TourMotion> }) {
+  const root = useRef<Group>(null);
+  const body = useRef<Group>(null);
+  const rings = useRef<Group>(null);
+  const surfaceMaterial = useRef<ShaderMaterial>(null);
+  const atmosphereMaterial = useRef<ShaderMaterial>(null);
+  const ringMaterial = useRef<ShaderMaterial>(null);
+  const lighting = planetLighting[kind];
+  const uniforms = useMemo(
+    () => ({
+      uNight: { value: new Color(lighting.night) },
+      uDay: { value: new Color(lighting.day) },
+      uRim: { value: new Color(lighting.rim) },
+      uSun: { value: new Vector3(...lighting.sun).normalize() },
+      uBands: { value: Number(kind === "flow") },
+      uPresence: { value: 1 },
+    }),
+    [kind, lighting],
+  );
+  const ringUniforms = useMemo(
+    () => ({
+      uRing: { value: new Color("#a38ac9") },
+      uPresence: { value: 1 },
+    }),
+    [],
+  );
+
+  useFrame(({ camera }) => {
+    if (motion.current.modal || document.hidden) return;
+    const travel = MathUtils.clamp(motion.current.progress - stop, -2, 2);
+    if (body.current) body.current.rotation.y = travel * 0.2;
+    if (rings.current) rings.current.rotation.z = -0.29 + travel * 0.06;
+    if (kind === "flow" && root.current) {
+      const distance = camera.position.distanceTo(root.current.position);
+      const presence = 1 - MathUtils.smoothstep(distance, 28, 42);
+      for (const material of [surfaceMaterial, atmosphereMaterial, ringMaterial]) {
+        if (material.current) material.current.uniforms.uPresence.value = presence;
+      }
+      root.current.visible = presence > 0;
     }
-    return new Float32Array(shape);
-  }, [at, scale]);
-  return <Segments positions={geometry} color={light} opacity={0.65} />;
+  });
+
+  return (
+    <group ref={root} position={position} scale={radius}>
+      <group ref={body} rotation={[0, 0, 0.19]}>
+        <mesh renderOrder={kind === "flow" ? -0.5 : 0}>
+          <sphereGeometry args={[1, 56, 40]} />
+          <shaderMaterial
+            ref={surfaceMaterial}
+            uniforms={uniforms}
+            vertexShader={planetVertex}
+            fragmentShader={planetFragment}
+            transparent={kind === "flow"}
+          />
+        </mesh>
+        <mesh scale={kind === "contact" ? 1.016 : 1.045}>
+          <sphereGeometry args={[1, 56, 40]} />
+          <shaderMaterial
+            ref={atmosphereMaterial}
+            uniforms={uniforms}
+            vertexShader={planetVertex}
+            fragmentShader={atmosphereFragment}
+            side={BackSide}
+            blending={AdditiveBlending}
+            transparent
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
+      {kind === "flow" && (
+        <group ref={rings}>
+          <mesh rotation={[1.17, 0.12, 0]}>
+            <ringGeometry args={[1.22, 1.98, 80]} />
+            <shaderMaterial
+              ref={ringMaterial}
+              uniforms={ringUniforms}
+              vertexShader={ringsVertex}
+              fragmentShader={ringsFragment}
+              side={DoubleSide}
+              transparent
+              depthWrite={false}
+            />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
 }
 
 export function Hall({
   stops,
+  screens,
+  motion,
   iconMaps,
 }: {
   stops: Stop[];
+  screens: Screen[];
+  motion: RefObject<TourMotion>;
   iconMaps: Record<string, Texture>;
 }) {
-  const end = depth(stops.length - 1) - 50;
-  const [sections, runners] = useMemo(() => buildRails(end), [end]);
+  const aspect = useThree(({ size }) => size.width / Math.max(size.height, 1));
+  const planets = useMemo(
+    () => layoutPlanets(stops, layoutCamera(stops, screens, aspect), aspect),
+    [stops, screens, aspect],
+  );
   const bioDepth = depth(stops.findIndex((stop) => stop.kind === "bio"));
   const toolsDepth = depth(stops.findIndex((stop) => stop.kind === "tools"));
   const endDepth = depth(stops.length - 1);
   return (
     <>
-      <color attach="background" args={["#070a12"]} />
-      <fogExp2 attach="fog" args={["#070a12", 0.024]} />
+      <color attach="background" args={[space]} />
+      <fogExp2 attach="fog" args={[space, 0.024]} />
       <ambientLight intensity={1.3} color="#7f9cb7" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, floor, (35 + end) / 2]}
-      >
-        <planeGeometry args={[86, 35 - end]} />
-        <shaderMaterial
-          vertexShader={worldVertex}
-          fragmentShader={floorFragment}
-        />
-      </mesh>
-      <Segments positions={sections} color="#3b6482" opacity={0.34} />
-      <Segments positions={runners} color="#458aaa" opacity={0.49} />
-      <Portal at={-14} />
-      <Portal at={-18} scale={1.14} light="#254b6b" />
-      <Halo pos={[5.2, 1.1, -16]} size={[29, 19]} color="#1d73b8" />
-      <Halo pos={[-7.2, 4.6, -27]} size={[17, 13]} color="#214278" />
-
-      <Portal at={bioDepth - 3} light="#566e8e" />
-      <Portal at={toolsDepth - 3} light="#779ab7" />
-      <Halo pos={[-5, 2.3, bioDepth - 3.3]} size={[32, 18]} color="#25435c" />
-      <Halo pos={[5.4, 1, toolsDepth - 5]} size={[24, 17]} color="#2f5385" />
+      <Stars end={endDepth} />
+      <Stars end={endDepth} near />
+      {planets.map((planet) => (
+        <Planet key={planet.kind} {...planet} motion={motion} />
+      ))}
       <Text
         font="/fonts/InstrumentSerif-Italic.ttf"
         fontSize={9.8}
@@ -204,12 +284,6 @@ export function Hall({
           </group>
         ))}
       </group>
-
-      <Portal at={endDepth + 1} />
-      <Portal at={endDepth - 4} scale={0.84} light="#508bad" />
-      <Portal at={endDepth - 9} scale={0.69} light="#416889" />
-      <Portal at={endDepth - 14} scale={0.58} light="#35566f" />
-      <Halo pos={[0, 0, endDepth - 12]} size={[33, 19]} color="#195372" />
     </>
   );
 }
