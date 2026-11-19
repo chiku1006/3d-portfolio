@@ -51,11 +51,3 @@ public-domain artwork (PD-textlogo) and identifies the Adobe trademarks:
 The After Effects SVG was downloaded from the Adobe source linked on its
 Commons page. The SVGs are used as supplied to identify the software, without
 implying sponsorship or affiliation.
-
-## Planet imagery
-
-Earth, Earth clouds, Jupiter, Saturn, and Saturn ring maps are by
-[Solar System Scope](https://www.solarsystemscope.com/textures/) (INOVE),
-based on NASA imagery, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-The four surface and cloud maps were resized and converted to WebP. The ring map
-is used as supplied. The website applies its own lighting and shaders.

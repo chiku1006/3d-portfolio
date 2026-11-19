@@ -137,6 +137,7 @@ export function MediaContent({
   onSelect: (index: number) => void;
 }) {
   const item = stop.items[selected];
+  const isWork = stop.chapter === 2 || stop.chapter === 3;
   const [title, subtitle] = item.title.split(" — ", 2);
   const stamp =
     item.duration === undefined
@@ -151,16 +152,18 @@ export function MediaContent({
       }
     >
       <div className="media-copy">
-        <p className="exhibit-kicker">
-          {stop.chapter === 1 ? "★ " : ""}
-          {item.category}
-          {stop.items.length > 1 && (
-            <span className="media-number">
-              {String(selected + 1).padStart(2, "0")} /{" "}
-              {String(stop.items.length).padStart(2, "0")}
-            </span>
-          )}
-        </p>
+        {isWork ? (
+          <nav className="work-collections" aria-label="Work collections">
+            <a href="#work" aria-current={stop.chapter === 2 ? "location" : undefined}>
+              Motion Graphics
+            </a>
+            <a href="#short-form" aria-current={stop.chapter === 3 ? "location" : undefined}>
+              Video Edits
+            </a>
+          </nav>
+        ) : (
+          <p className="exhibit-kicker">★ {item.category}</p>
+        )}
         <h2 id={stop.id + "-title"} aria-label={item.title}>
           {title}
           {subtitle && <span className="media-subtitle">{subtitle}</span>}

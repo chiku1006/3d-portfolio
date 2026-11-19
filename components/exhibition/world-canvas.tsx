@@ -15,7 +15,7 @@ import {
 } from "react";
 import { MathUtils, SRGBColorSpace, Vector3, type Texture } from "three";
 import { tools } from "./content";
-import { Hall, planetTextures } from "./hall";
+import { Hall } from "./hall";
 import { MediaScreen } from "./screen";
 import type { ExhibitMedia, Stop, TourMotion } from "./types";
 import {
@@ -201,7 +201,6 @@ function ExhibitionWorld({
         .filter(({ item }) => item.posterAvailable)
         .map(({ item }) => item.posterSrc),
       ...tools.map(({ icon }) => icon),
-      ...Object.values(planetTextures),
     ],
     [screens],
   );

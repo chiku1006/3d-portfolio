@@ -67,9 +67,6 @@ html:has(.exhibition[data-spatial]) {
   font-size: 13px;
   transition: color 180ms ease;
 }
-.nav-label-short {
-  display: none;
-}
 .exhibit-nav a[aria-current],
 .exhibit-nav a:hover {
   color: var(--foreground);
@@ -380,8 +377,25 @@ html:has(.exhibition[data-spatial]) {
 .media-copy h2 + .exhibit-button {
   margin-top: 24px;
 }
-.media-number {
-  color: #8397ab;
+.work-collections {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px clamp(12px, 1.7vw, 24px);
+  margin-bottom: 16px;
+}
+.work-collections a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding-block: 4px;
+  border-bottom: 1px solid transparent;
+  color: #aebbd0;
+  font-size: 13px;
+}
+.work-collections a:is(:hover, :focus-visible, [aria-current]) {
+  border-color: var(--accent);
+  color: #edf7ff;
 }
 .project-picker {
   display: grid;
@@ -724,6 +738,13 @@ html:has(.exhibition[data-spatial]) {
   [data-spatial] .media-copy .exhibit-kicker {
     margin-bottom: 8px;
   }
+  .work-collections {
+    margin-bottom: 7px;
+  }
+  .work-collections a {
+    min-height: 24px;
+    font-size: 12px;
+  }
   [data-spatial] .media-copy .exhibit-description {
     margin-block: 8px 11px;
     font-size: 13px;
@@ -807,16 +828,10 @@ html:has(.exhibition[data-spatial]) {
 
 @media (max-width: 580px) {
   .exhibit-header {
-    gap: 6px;
+    gap: 7px;
   }
   .exhibit-nav {
-    gap: clamp(5px, 1.6vw, 8px);
-  }
-  .nav-label-full {
-    display: none;
-  }
-  .nav-label-short {
-    display: inline;
+    gap: 8px;
   }
 }
 

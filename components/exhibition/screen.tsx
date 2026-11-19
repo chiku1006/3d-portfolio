@@ -3,8 +3,8 @@
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Color,
   MathUtils,
+  Mesh,
   SRGBColorSpace,
   Vector2,
   VideoTexture,
@@ -14,7 +14,7 @@ import {
 } from "three";
 import type { ExhibitMedia } from "./types";
 import type { Screen } from "./world-layout";
-import { screenFragment, spaceBackground, worldVertex } from "./shaders";
+import { screenFragment, worldVertex } from "./shaders";
 
 const hoverQuery = "(hover: hover) and (pointer: fine)";
 
@@ -52,6 +52,7 @@ export function MediaScreen({
   onOpen: (item: ExhibitMedia) => void;
 }) {
   const group = useRef<Group>(null);
+  const focus = useRef(0);
   const shaderRef = useRef<ShaderMaterial>(null);
   const clipRef = useRef<Preview | null>(null);
   const invalidate = useThree((state) => state.invalidate);
@@ -69,8 +70,7 @@ export function MediaScreen({
       },
       uVideoCrop: { value: new Vector2(1, 1) },
       uVideoMix: { value: 0 },
-      uSpace: { value: new Color(spaceBackground) },
-      uFocus: { value: 0 },
+      uOpacity: { value: 1 },
     }),
     [poster, aspect, image],
   );
@@ -164,7 +164,19 @@ export function MediaScreen({
     };
   }, [canvas, previewActive]);
 
-  useFrame((_, dt) => {
+  useFrame(({ camera }, dt) => {
+    const frame = group.current;
+    if (!frame) return;
+    const focusTarget = Number(focused);
+    focus.current = MathUtils.damp(focus.current, focusTarget, 16, dt);
+    const distance = camera.position.z - frame.position.z;
+    const opacity = Math.max(focus.current, 1 - MathUtils.smoothstep(distance, 28, 48));
+    frame.visible = opacity > 0.003;
+    for (const child of frame.children) {
+      if (child instanceof Mesh && !Array.isArray(child.material)) {
+        child.material.opacity = opacity;
+      }
+    }
     const preview = clipRef.current;
     const target = Number(previewActive && Boolean(preview?.ready));
     const current = shaderRef.current;
@@ -179,22 +191,19 @@ export function MediaScreen({
       dt,
     );
     current.uniforms.uVideoMix.value = blend;
-    const focus = MathUtils.damp(current.uniforms.uFocus.value, Number(focused), 16, dt);
-    current.uniforms.uFocus.value = focus;
+    current.uniforms.uOpacity.value = opacity;
     if (!previewActive && preview && blend < 0.012) dispose();
     if (
       Math.abs(blend - target) > 0.003 ||
-      Math.abs(focus - Number(focused)) > 0.003 ||
+      Math.abs(focus.current - focusTarget) > 0.003 ||
       (previewActive &&
         preview?.ready &&
         !preview.clip.requestVideoFrameCallback)
     )
       invalidate();
 
-    if (!group.current) return;
     const yaw = screen.yaw + (previewActive ? -screen.side * 0.04 : 0);
     const z = screen.z + (previewActive ? 0.22 : 0);
-    const frame = group.current;
     frame.rotation.y = MathUtils.damp(frame.rotation.y, yaw, 12, dt);
     frame.position.z = MathUtils.damp(frame.position.z, z, 12, dt);
     if (
@@ -227,11 +236,12 @@ export function MediaScreen({
           color="#122131"
           metalness={0.62}
           roughness={0.51}
+          transparent
         />
       </mesh>
       <mesh position={[0, 0, -0.012]}>
         <planeGeometry args={[screen.width + 0.075, screen.height + 0.075]} />
-        <meshBasicMaterial color={screen.reel ? "#87d8ed" : "#46667d"} />
+        <meshBasicMaterial color={screen.reel ? "#87d8ed" : "#46667d"} transparent />
       </mesh>
       <mesh
         onPointerOver={enter}
@@ -251,14 +261,15 @@ export function MediaScreen({
             uniforms={uniforms}
             vertexShader={worldVertex}
             fragmentShader={screenFragment}
+            transparent
           />
         ) : (
-          <meshBasicMaterial color="#102030" />
+          <meshBasicMaterial color="#102030" transparent />
         )}
       </mesh>
       <mesh position={[-screen.width * 0.43, screen.height / 2 + 0.065, 0.007]}>
         <planeGeometry args={[screen.width * 0.12, 0.026]} />
-        <meshBasicMaterial color="#a0edff" toneMapped={false} />
+        <meshBasicMaterial color="#a0edff" toneMapped={false} transparent />
       </mesh>
     </group>
   );

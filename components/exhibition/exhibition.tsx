@@ -30,8 +30,7 @@ const spatialPreference =
 const finePointer = "(hover: hover) and (pointer: fine)";
 const links = [
   { label: "Home", id: "home", chapter: 0 },
-  { label: "Motion Graphics", short: "Motion", id: "work", chapter: 2 },
-  { label: "Video Edits", short: "Edits", id: "short-form", chapter: 3 },
+  { label: "My Work", id: "work", chapter: 2 },
   { label: "Info", id: "info", chapter: 4 },
   { label: "Hire Me", id: "hire", chapter: 5 },
 ] as const;
@@ -314,19 +313,13 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
               aria-label={link.label}
               aria-current={
                 current.chapter === link.chapter ||
-                (link.chapter === 0 && current.chapter === 1)
+                (link.chapter === 0 && current.chapter === 1) ||
+                (link.chapter === 2 && current.chapter === 3)
                   ? "location"
                   : undefined
               }
             >
-              {"short" in link ? (
-                <>
-                  <span className="nav-label-full">{link.label}</span>
-                  <span className="nav-label-short">{link.short}</span>
-                </>
-              ) : (
-                link.label
-              )}
+              {link.label}
               {link.chapter === 5 && <ArrowDownRight size={14} />}
             </a>
           ))}

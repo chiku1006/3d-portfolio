@@ -15,13 +15,14 @@ import {
 import { tools } from "./content";
 import {
   atmosphereFragment,
-  cloudsFragment,
+  nebulaFragment,
+  nebulaVertex,
   planetFragment,
   planetVertex,
   ringsFragment,
   ringsVertex,
-  saturnRingInner,
-  saturnRingOuter,
+  ringInner,
+  ringOuter,
   spaceBackground,
   starsFragment,
   starsVertex,
@@ -37,46 +38,40 @@ import {
 } from "./world-layout";
 import type { Stop, TourMotion } from "./types";
 
-export const planetTextures = {
-  earth: "/textures/planets/earth.webp",
-  clouds: "/textures/planets/earth-clouds.webp",
-  saturn: "/textures/planets/saturn.webp",
-  rings: "/textures/planets/2k_saturn_ring_alpha.png",
-  jupiter: "/textures/planets/jupiter.webp",
-} as const;
+const skyUniforms = { uSpace: { value: new Color(spaceBackground) } };
 
 const planetLighting = {
   arrival: {
-    map: planetTextures.earth,
-    rim: "#64b7ff",
-    sun: [-0.78, 0.46, 0.45],
-    exposure: 0.67,
-    tilt: [0, 0, 0.19],
-    longitude: -2.43,
+    night: "#0a1025",
+    day: "#4c72af",
+    rim: "#80c8ff",
+    sun: [-0.86, 0.45, 0.07],
+    bands: 0.22,
+    tilt: [0, 0, 0.29],
     flattening: 1,
   },
   flow: {
-    map: planetTextures.saturn,
-    rim: "#c1a47c",
-    sun: [-0.61, 0.64, 0.46],
-    exposure: 0.42,
-    tilt: [-0.4, 0, -0.29],
-    longitude: 0,
-    flattening: 0.91,
+    night: "#171328",
+    day: "#6e569c",
+    rim: "#b099f4",
+    sun: [-0.69, 0.59, 0.38],
+    bands: 0.58,
+    tilt: [-0.44, 0, -0.24],
+    flattening: 0.94,
   },
   contact: {
-    map: planetTextures.jupiter,
-    rim: "#bc9c81",
-    sun: [-0.77, 0.59, 0.21],
-    exposure: 0.40,
-    tilt: [1.23, 0, 0.19],
-    longitude: -1.4,
-    flattening: 0.98,
+    night: "#090f23",
+    day: "#5063a9",
+    rim: "#9eaeff",
+    sun: [-0.44, 0.85, -0.19],
+    bands: 0.30,
+    tilt: [0.62, 0, 0.21],
+    flattening: 1,
   },
 } as const;
 
 function scatterStars(near: boolean, end: number) {
-  const count = near ? 630 : 1900;
+  const count = near ? 1240 : 4850;
   const positions = new Float32Array(count * 3);
   const appearance = new Float32Array(count * 2);
   let seed = near ? 171 : 41;
@@ -100,8 +95,8 @@ function scatterStars(near: boolean, end: number) {
       positions[i * 3 + 1] = Math.sin(angle) * lateral;
       positions[i * 3 + 2] = end * 0.5 - forward * distance;
     }
-    appearance[i * 2] = random() ** 2.8;
-    appearance[i * 2 + 1] = random() ** 2;
+    appearance[i * 2] = random() ** 3.5;
+    appearance[i * 2 + 1] = random() ** 1.7;
   }
   return { positions, appearance };
 }
@@ -142,8 +137,7 @@ function Planet({
   radius,
   stop,
   motion,
-  maps,
-}: PlanetPlacement & { motion: RefObject<TourMotion>; maps: Record<string, Texture> }) {
+}: PlanetPlacement & { motion: RefObject<TourMotion> }) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const axis = useRef<Group>(null);
@@ -151,35 +145,35 @@ function Planet({
   const atmosphereMaterial = useRef<ShaderMaterial>(null);
   const ringMaterial = useRef<ShaderMaterial>(null);
   const lighting = planetLighting[kind];
-  const saturn = kind === "flow";
+  const ringed = kind === "flow";
   const uniforms = useMemo(
     () => ({
-      uSurface: { value: maps[lighting.map] },
-      uClouds: { value: maps[planetTextures.clouds] },
+      uNight: { value: new Color(lighting.night) },
+      uDay: { value: new Color(lighting.day) },
       uRim: { value: new Color(lighting.rim) },
       uSun: { value: new Vector3(...lighting.sun).normalize() },
-      uExposure: { value: lighting.exposure },
+      uBands: { value: lighting.bands },
       uPresence: { value: 1 },
     }),
-    [lighting, maps],
+    [lighting],
   );
   const ringUniforms = useMemo(
     () => ({
-      uRingMap: { value: maps[planetTextures.rings] },
+      uRing: { value: new Color("#b1a1e6") },
       uSun: uniforms.uSun,
       uCenter: { value: new Vector3(...position) },
       uRadius: { value: radius },
       uPresence: { value: 1 },
     }),
-    [maps, position, radius, uniforms],
+    [position, radius, uniforms],
   );
 
   useFrame(({ camera }) => {
     if (motion.current.modal || document.hidden) return;
     const travel = MathUtils.clamp(motion.current.progress - stop, -2, 2);
-    if (body.current) body.current.rotation.y = lighting.longitude + travel * 0.2;
-    if (saturn && axis.current) axis.current.rotation.z = lighting.tilt[2] + travel * 0.06;
-    if (saturn && root.current) {
+    if (body.current) body.current.rotation.y = travel * 0.2;
+    if (ringed && axis.current) axis.current.rotation.z = lighting.tilt[2] + travel * 0.06;
+    if (ringed && root.current) {
       const distance = camera.position.distanceTo(root.current.position);
       const presence = 1 - MathUtils.smoothstep(distance, 28, 42);
       for (const material of [surfaceMaterial, atmosphereMaterial, ringMaterial]) {
@@ -192,24 +186,18 @@ function Planet({
   return (
     <group ref={root} position={position} scale={radius}>
       <group ref={axis} rotation={[...lighting.tilt]}>
-        <group ref={body} rotation-y={lighting.longitude} scale={[1, lighting.flattening, 1]}>
-          <mesh renderOrder={saturn ? -0.5 : 0}>
+        <group ref={body} scale={[1, lighting.flattening, 1]}>
+          <mesh renderOrder={ringed ? -0.5 : 0}>
             <sphereGeometry args={[1, 64, 48]} />
             <shaderMaterial
               ref={surfaceMaterial}
               uniforms={uniforms}
               vertexShader={planetVertex}
               fragmentShader={planetFragment}
-              transparent={saturn}
+              transparent={ringed}
             />
           </mesh>
-          {kind === "arrival" && (
-            <mesh scale={1.008} rotation-y={0.09}>
-              <sphereGeometry args={[1, 56, 40]} />
-              <shaderMaterial uniforms={uniforms} vertexShader={planetVertex} fragmentShader={cloudsFragment} transparent depthWrite={false} />
-            </mesh>
-          )}
-          <mesh scale={kind === "arrival" ? 1.035 : 1.014}>
+          <mesh scale={kind === "contact" ? 1.02 : 1.043}>
             <sphereGeometry args={[1, 56, 40]} />
             <shaderMaterial
               ref={atmosphereMaterial}
@@ -223,9 +211,9 @@ function Planet({
             />
           </mesh>
         </group>
-        {saturn && (
+        {ringed && (
           <mesh rotation-x={Math.PI / 2}>
-            <ringGeometry args={[saturnRingInner, saturnRingOuter, 96]} />
+            <ringGeometry args={[ringInner, ringOuter, 96]} />
             <shaderMaterial
               ref={ringMaterial}
               uniforms={ringUniforms}
@@ -273,12 +261,23 @@ export function Hall({
     <>
       <color attach="background" args={[spaceBackground]} />
       <fogExp2 attach="fog" args={[spaceBackground, 0.024]} />
+      <mesh position={[0, 0, endDepth * 0.5]} frustumCulled={false} renderOrder={-10}>
+        <sphereGeometry args={[1800, 28, 18]} />
+        <shaderMaterial
+          uniforms={skyUniforms}
+          vertexShader={nebulaVertex}
+          fragmentShader={nebulaFragment}
+          side={BackSide}
+          depthTest={false}
+          depthWrite={false}
+        />
+      </mesh>
       <ambientLight intensity={1.3} color="#7f9cb7" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
       <Stars end={endDepth} />
       <Stars end={endDepth} near />
       {planets.map((planet) => (
-        <Planet key={planet.kind} {...planet} motion={motion} maps={maps} />
+        <Planet key={planet.kind} {...planet} motion={motion} />
       ))}
       <Spacecraft {...spacecraft} nearby={active < 2} motion={motion} />
       <Text
