@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-export function Opening({ ready }: { ready: boolean }) {
+export function Opening() {
   const layer = useRef<HTMLDivElement>(null);
-  const [minimumElapsed, setMinimumElapsed] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -18,13 +17,13 @@ export function Opening({ ready }: { ready: boolean }) {
       return () => cancelAnimationFrame(frame);
     }
 
-    const minimum = window.setTimeout(() => setMinimumElapsed(true), 440);
     window.addEventListener("pointerdown", dismiss, { once: true });
     window.addEventListener("keydown", dismiss, { once: true });
+    window.addEventListener("wheel", dismiss, { once: true, passive: true });
     return () => {
-      window.clearTimeout(minimum);
       window.removeEventListener("pointerdown", dismiss);
       window.removeEventListener("keydown", dismiss);
+      window.removeEventListener("wheel", dismiss);
     };
   }, [dismissed]);
 
@@ -33,20 +32,23 @@ export function Opening({ ready }: { ready: boolean }) {
     <div
       ref={layer}
       className="exhibit-opening"
-      data-reveal={ready && minimumElapsed ? "" : undefined}
       aria-hidden="true"
       onAnimationEnd={(event) => {
-        if (event.target === event.currentTarget || event.animationName === "opening-reveal") {
-          setDismissed(true);
-        }
+        if (event.target === event.currentTarget) setDismissed(true);
       }}
     >
       <div className="opening-scene">
+        <div className="opening-horizon" />
         <div className="opening-orbit">
           <span className="opening-sweep" />
-          <span className="opening-monogram">sm<span>.</span></span>
+          <span className="opening-monogram">
+            sm<span>.</span>
+          </span>
         </div>
-        <p>Loading exhibition</p>
+        <div className="opening-caption">
+          <p>Loading exhibition</p>
+          <span />
+        </div>
       </div>
     </div>
   );

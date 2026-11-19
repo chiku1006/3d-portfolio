@@ -13,11 +13,12 @@ html:has(.exhibition[data-spatial]) {
 }
 
 .exhibit-opening {
+  --opening-time: 3.6s;
   position: fixed;
   z-index: 40;
   inset: 0;
   pointer-events: none;
-  animation: opening-timeout 1.45s linear both;
+  animation: opening-timeout var(--opening-time) linear both;
 }
 .opening-scene {
   position: absolute;
@@ -26,20 +27,45 @@ html:has(.exhibition[data-spatial]) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 27px;
+  gap: 30px;
+  overflow: hidden;
+  isolation: isolate;
   background:
-    radial-gradient(ellipse at 52% 47%, #171d42 0%, #0b1025 29%, #050812 68%);
+    radial-gradient(ellipse at 52% 45%, #1a2348 0%, #0c132c 27%, #050812 69%);
 }
-.exhibit-opening[data-reveal] .opening-scene {
-  animation: opening-reveal 280ms ease-in both;
+.opening-scene::before {
+  position: absolute;
+  z-index: -1;
+  inset: -14%;
+  background-image:
+    radial-gradient(circle at 20% 70%, #afceff 0.6px, transparent 1.4px),
+    radial-gradient(circle at 78% 27%, #9f92db 0.5px, transparent 1.3px),
+    radial-gradient(circle at 55% 46%, #a4dcfa 0.65px, transparent 1.5px);
+  background-size: 103px 127px, 167px 149px, 241px 193px;
+  animation: opening-drift var(--opening-time) ease-out both;
+  content: "";
+}
+.opening-horizon {
+  position: absolute;
+  z-index: -1;
+  top: 84%;
+  left: 50%;
+  width: max(760px, 94vw);
+  aspect-ratio: 1;
+  border: 1px solid rgb(163 195 255 / 35%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 0%, #233951, #090e20 20%);
+  box-shadow: 0 -5px 32px rgb(115 161 245 / 23%);
+  animation: opening-horizon 3s cubic-bezier(.2,.65,.32,1) both;
 }
 .opening-orbit {
   position: relative;
   display: grid;
-  width: clamp(138px, 24vw, 210px);
+  width: clamp(145px, 25vw, 228px);
   aspect-ratio: 1;
   place-items: center;
   isolation: isolate;
+  animation: opening-arrive 1.4s cubic-bezier(.16,1,.3,1) both;
 }
 .opening-orbit::before,
 .opening-orbit::after {
@@ -64,7 +90,7 @@ html:has(.exhibition[data-spatial]) {
   border-top-color: #9eeaff;
   border-right-color: #8a82db;
   border-radius: 50%;
-  animation: opening-orbit 920ms cubic-bezier(.2,.7,.4,1) both;
+  animation: opening-orbit 2.95s cubic-bezier(.16,.58,.27,1) both;
 }
 .opening-sweep::after {
   position: absolute;
@@ -85,22 +111,54 @@ html:has(.exhibition[data-spatial]) {
 .opening-monogram span {
   color: var(--accent);
 }
-.exhibit-opening p {
+.opening-caption {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.opening-caption p {
   color: #a8b7d1;
   font: 11px/1.4 ui-monospace, monospace;
   letter-spacing: 0.17em;
   text-transform: uppercase;
 }
+.opening-caption > span {
+  position: relative;
+  width: 118px;
+  height: 1px;
+  overflow: hidden;
+  background: rgb(159 201 255 / 16%);
+}
+.opening-caption > span::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #7778d2, #c1efff);
+  transform-origin: left;
+  animation: opening-line 2.9s cubic-bezier(.22,.65,.38,1) both;
+  content: "";
+}
 @keyframes opening-orbit {
-  from { transform: rotate(-142deg); }
-  to { transform: rotate(188deg); }
+  from { transform: rotate(-136deg); }
+  to { transform: rotate(432deg); }
+}
+@keyframes opening-arrive {
+  from { opacity: 0.2; transform: scale(0.87); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes opening-drift {
+  from { opacity: 0.12; transform: translateY(18px) scale(0.95); }
+  to { opacity: 0.55; transform: translateY(-11px) scale(1.03); }
+}
+@keyframes opening-horizon {
+  from { opacity: 0; transform: translate(-50%, 35px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes opening-line {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 @keyframes opening-timeout {
-  0%, 80% { opacity: 1; visibility: visible; }
-  100% { opacity: 0; visibility: hidden; }
-}
-@keyframes opening-reveal {
-  from { opacity: 1; visibility: visible; }
+  0%, 81% { opacity: 1; visibility: visible; animation-timing-function: ease-in-out; }
   to { opacity: 0; visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -301,6 +359,21 @@ html:has(.exhibition[data-spatial]) {
   font-weight: 400;
   letter-spacing: -0.02em;
 }
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .exhibition :is(h1, h2) :is(em, .media-subtitle) {
+    background-image: linear-gradient(90deg, #fff, #f4fbff 38%, #b8e5ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: none;
+  }
+}
+@media (forced-colors: active) {
+  .exhibition :is(h1, h2) :is(em, .media-subtitle) {
+    background: none;
+    color: CanvasText;
+  }
+}
 .arrival-layout,
 .media-layout {
   display: grid;
@@ -320,7 +393,9 @@ html:has(.exhibition[data-spatial]) {
 }
 .arrival-copy h1 em {
   display: block;
+  inline-size: fit-content;
   margin-left: 0.025em;
+  padding-inline-end: 0.05em;
   font-size: 1.13em;
 }
 .arrival-copy h1 em > span {
@@ -454,7 +529,10 @@ html:has(.exhibition[data-spatial]) {
 }
 .media-subtitle {
   display: block;
+  inline-size: fit-content;
+  max-inline-size: 100%;
   margin-top: 0.24em;
+  padding-inline-end: 0.05em;
   font: italic 400 0.54em/1 var(--serif);
   letter-spacing: 0;
 }
@@ -645,9 +723,6 @@ html:has(.exhibition[data-spatial]) {
   justify-self: center;
   text-align: center;
   text-shadow: 0 1px 25px #060a12;
-}
-.finale-copy h2 em {
-  color: var(--accent);
 }
 .finale-copy .exhibit-kicker,
 .finale-copy .exhibit-actions {

@@ -291,7 +291,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
   const showreel = reelStop?.kind === "media" ? reelStop.items[0] : undefined;
   return (
     <div className="exhibition" data-spatial={spatial || undefined}>
-      <Opening ready={ready || !showWorld} />
+      <Opening />
       <header className="exhibit-header">
         <a
           className="exhibit-logo"
