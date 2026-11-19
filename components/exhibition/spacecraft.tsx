@@ -1,5 +1,5 @@
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useFrame } from "@react-three/fiber";
+import { useMemo, useRef, type RefObject } from "react";
 import { Shape, type Group } from "three";
 import type { TourMotion } from "./types";
 
@@ -14,17 +14,16 @@ const wingExtrusion = {
 export function Spacecraft({
   position,
   scale,
-  nearby,
   motion,
+  reducedMotion,
 }: {
   position: [number, number, number];
   scale: number;
-  nearby: boolean;
   motion: RefObject<TourMotion>;
+  reducedMotion: boolean;
 }) {
   const flight = useRef<Group>(null);
   const exhaust = useRef<Group>(null);
-  const invalidate = useThree((state) => state.invalidate);
   const wing = useMemo(() => {
     const shape = new Shape();
     shape.moveTo(0.16, 0.35);
@@ -37,17 +36,12 @@ export function Spacecraft({
     return shape;
   }, []);
 
-  useEffect(() => {
-    if (!nearby) return;
-    const timer = window.setInterval(() => {
-      if (!document.hidden && !motion.current.modal) invalidate();
-    }, 1000 / 30);
-    return () => window.clearInterval(timer);
-  }, [invalidate, motion, nearby]);
-
-  useFrame(() => {
+  useFrame(({ camera }) => {
     if (!flight.current || !exhaust.current || document.hidden || motion.current.modal) return;
-    const time = performance.now() / 1000;
+    const distance = camera.position.z - position[2];
+    flight.current.visible = distance > -2 && distance < 64;
+    if (!flight.current.visible) return;
+    const time = reducedMotion ? 0 : performance.now() / 1000;
     const drift = Math.sin(time * 0.85);
     const travel = Math.min(motion.current.progress, 2);
     flight.current.position.set(drift * 0.44 + travel * 0.55, Math.sin(time * 1.1) * 0.18 + travel * 0.27, 0);

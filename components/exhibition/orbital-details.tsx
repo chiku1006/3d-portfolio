@@ -1,6 +1,7 @@
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useRef, type RefObject } from "react";
-import type { Group } from "three";
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { BoxGeometry, type Group } from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { planetVertex } from "./shaders";
 import type { TourMotion } from "./types";
 
@@ -87,6 +88,20 @@ function Astronaut({ arm }: { arm: RefObject<Group | null> }) {
 }
 
 function Satellite() {
+  const [frames, cells] = useMemo(() => {
+    const frames = [-1, 1].map((side) => new BoxGeometry(1.13, 0.44, 0.10).translate(side * 0.84, 0, -0.042));
+    const cells = [-1, 1].flatMap((side) => [-0.38, -0.13, 0.12].map((offset) =>
+      new BoxGeometry(0.223, 0.36, 0.032).translate(side * (0.96 + offset), 0, 0.017),
+    ));
+    const geometry = [mergeGeometries(frames), mergeGeometries(cells)] as const;
+    for (const part of [...frames, ...cells]) part.dispose();
+    return geometry;
+  }, []);
+  useEffect(() => () => {
+    frames.dispose();
+    cells.dispose();
+  }, [frames, cells]);
+
   return (
     <>
       <mesh rotation-z={Math.PI / 2}>
@@ -105,54 +120,41 @@ function Satellite() {
         <sphereGeometry args={[0.049, 10, 8]} />
         <meshBasicMaterial color="#d9ddff" />
       </mesh>
-      {[-1, 1].map((side) => (
-        <group key={side} position={[side * 0.96, 0, 0]}>
-          <mesh position={[side * -0.12, 0, -0.042]}>
-            <boxGeometry args={[1.13, 0.44, 0.10]} />
-            <meshStandardMaterial {...hardware} />
-          </mesh>
-          {[-0.38, -0.13, 0.12].map((x) => (
-            <mesh key={x} position={[x * side, 0, 0.017]}>
-              <boxGeometry args={[0.223, 0.36, 0.032]} />
-              <meshStandardMaterial color="#415798" emissive="#25355c" metalness={0.42} roughness={0.45} />
-            </mesh>
-          ))}
-        </group>
-      ))}
+      <mesh geometry={frames}>
+        <meshStandardMaterial {...hardware} />
+      </mesh>
+      <mesh geometry={cells}>
+        <meshStandardMaterial color="#415798" emissive="#25355c" metalness={0.42} roughness={0.45} />
+      </mesh>
     </>
   );
 }
 
 type Placement = { position: [number, number, number]; scale: number };
 
-export function OrbitalDetails({ astronaut, satellite, nearby, motion }: {
+export function OrbitalDetails({ astronaut, satellite, motion, reducedMotion }: {
   astronaut: Placement;
   satellite: Placement;
-  nearby: boolean;
   motion: RefObject<TourMotion>;
+  reducedMotion: boolean;
 }) {
   const pilot = useRef<Group>(null);
   const arm = useRef<Group>(null);
   const relay = useRef<Group>(null);
-  const invalidate = useThree((state) => state.invalidate);
-
-  useEffect(() => {
-    if (!nearby) return;
-    const timer = window.setInterval(() => {
-      if (!document.hidden && !motion.current.modal) invalidate();
-    }, 1000 / 30);
-    return () => window.clearInterval(timer);
-  }, [invalidate, motion, nearby]);
 
   useFrame(({ camera }) => {
     if (
       !pilot.current || !relay.current || !arm.current ||
       document.hidden || motion.current.modal
     ) return;
-    const time = performance.now() / 1000;
+    const pilotDistance = camera.position.z - astronaut.position[2];
+    const relayDistance = camera.position.z - satellite.position[2];
+    pilot.current.visible = pilotDistance > -2 && pilotDistance < 42;
+    relay.current.visible = relayDistance > -2 && relayDistance < 39;
+    if (!pilot.current.visible && !relay.current.visible) return;
+    const time = reducedMotion ? 0 : performance.now() / 1000;
     const float = Math.sin(time * 1.18);
-    const pointer = motion.current.pointerX;
-    pilot.current.visible = camera.position.z - astronaut.position[2] < 42;
+    const pointer = reducedMotion ? 0 : motion.current.pointerX;
     pilot.current.position.set(0.24 * Math.sin(time * 0.72), float * 0.17, 0);
     pilot.current.rotation.set(
       0.11 + float * 0.10,
@@ -160,7 +162,6 @@ export function OrbitalDetails({ astronaut, satellite, nearby, motion }: {
       -0.33 + float * 0.10,
     );
     arm.current.rotation.z = 1.34 + 0.2 * Math.sin(time * 2.6);
-    relay.current.visible = camera.position.z - satellite.position[2] < 39;
     relay.current.position.y = Math.sin(time * 0.96 + 1.2) * 0.16;
     relay.current.rotation.set(
       0.27 + float * 0.14,

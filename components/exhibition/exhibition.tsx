@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { ArrowDownRight, X } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -22,6 +23,7 @@ import { WorldBoundary } from "./world-boundary";
 import {
   chapters,
   type ExhibitMedia,
+  type MediaStop,
   type Stop,
   type TourMotion,
 } from "./types";
@@ -76,14 +78,51 @@ function InquiryDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+const TrackStation = memo(function TrackStation({
+  stop, active, selected, showreel, onOpen, onSelect, onInquiry,
+}: {
+  stop: Stop;
+  active: boolean;
+  selected: number;
+  showreel?: ExhibitMedia;
+  onOpen: (item: ExhibitMedia, origin?: HTMLElement) => void;
+  onSelect: (stop: MediaStop, index: number) => void;
+  onInquiry: (origin: HTMLElement) => void;
+}) {
+  return (
+    <section
+      id={stop.id}
+      data-stop=""
+      data-kind={stop.kind}
+      data-active={active || undefined}
+      aria-labelledby={stop.id + "-title"}
+      tabIndex={-1}
+      className="exhibit-stop"
+    >
+      <div className="station-body">
+        {stop.kind === "arrival" && showreel && <Arrival item={showreel} onOpen={onOpen} />}
+        {stop.kind === "media" && stop.items.length > 0 && (
+          <MediaContent stop={stop} selected={selected} onOpen={onOpen} onSelect={(index) => onSelect(stop, index)} />
+        )}
+        {stop.kind === "bio" && <Bio />}
+        {stop.kind === "tools" && <Tools />}
+        {stop.kind === "contact" && <ContactContent onInquiry={onInquiry} />}
+      </div>
+    </section>
+  );
+});
+
 export function Exhibition({ stops }: { stops: Stop[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const originRef = useRef<HTMLElement | null>(null);
   const invalidate = useRef<(() => void) | null>(null);
   const restoreStop = useRef<string | null>(null);
   const tour = useRef<TourMotion>({
+    target: 0,
     progress: 0,
     active: 0,
+    moving: false,
+    snap: 0,
     pointerX: 0,
     pointerY: 0,
     modal: false,
@@ -109,6 +148,16 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     (view === "3d" || (view === "auto" && auto3D)) && worldStatus !== "failed";
   const worldVisible = showWorld && worldStatus === "ready";
   const spatial = worldVisible && !shortViewport;
+
+  const selectStop = useCallback((index: number) => {
+    if (tour.current.active === index) return;
+    tour.current.active = index;
+    setActive(index);
+  }, []);
+  const onCameraFrame = useCallback((progress: number, moving: boolean) => {
+    tour.current.progress = progress;
+    tour.current.moving = moving;
+  }, []);
 
   const rememberStop = useCallback(() => {
     restoreStop.current = stops[tour.current.active]?.id ?? null;
@@ -184,15 +233,13 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     const nodes = Array.from(
       track.querySelectorAll<HTMLElement>("[data-stop]"),
     );
-    const cursor = { position: 0 };
     let centers: number[] = [];
-    const ease = gsap.parseEase("power2.inOut");
     function readPositions() {
       centers = nodes.map(
         (node) => node.getBoundingClientRect().top + window.scrollY,
       );
     }
-    function update(y: number) {
+    function update(y: number, snap = false) {
       // A rotating device can resize the old layout before React switches modes.
       const isShort = !height.matches;
       if (isShort !== shortViewport || motion.matches !== reducedMotion) return;
@@ -201,44 +248,32 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       const next = centers[index + 1];
       const local =
         next === undefined ? 0 : (y - centers[index]) / (next - centers[index]);
-      const travel = ease(gsap.utils.clamp(0, 1, (local - 0.17) / 0.69));
-      const selected = spatial
-        ? index + Number(travel >= 0.5)
-        : Math.max(
-            0,
-            centers.findLastIndex(
+      const target = index + Math.max(0, Math.min(1, local));
+      if (!spatial || snap || reducedMotion) {
+        const selected = spatial
+          ? index + Number(local >= 0.515)
+          : Math.max(0, centers.findLastIndex(
               (stop) => stop <= y + Math.min(160, window.innerHeight * 0.28),
-            ),
-          );
-      tour.current.progress = reducedMotion ? selected : index + travel;
-      if (tour.current.active !== selected) {
-        tour.current.active = selected;
-        setActive(selected);
+            ));
+        selectStop(selected);
       }
+      if (!snap && tour.current.target === target) return;
+      tour.current.target = target;
+      if (snap) tour.current.snap++;
       invalidate.current?.();
     }
 
     readPositions();
-    const tween = gsap.fromTo(
-      cursor,
-      { position: 0 },
-      {
-        position: 1,
-        duration: 1,
-        ease: "none",
-      },
-    );
     const trigger = ScrollTrigger.create({
       trigger: track,
       start: "top top",
       end: "bottom bottom",
-      animation: tween,
-      scrub: spatial && !reducedMotion ? 0.23 : true,
-      onRefresh: readPositions,
+      onUpdate: (self) => update(self.scroll()),
+      onRefresh: (self) => {
+        readPositions();
+        update(self.scroll());
+      },
     });
-    tween.eventCallback("onUpdate", () =>
-      update(trigger.start + cursor.position * (trigger.end - trigger.start)),
-    );
 
     function resolveProjectLink(fragment: string) {
       if (!fragment || stops.some((stop) => stop.id === fragment)) return;
@@ -271,28 +306,29 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
         document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
       ScrollTrigger.refresh();
       trigger.update();
-      const scrub = trigger.getTween();
-      if (scrub) scrub.progress(1);
-      update(window.scrollY);
+      update(window.scrollY, true);
     });
     return () => {
       window.removeEventListener("hashchange", onHashChange);
       cancelAnimationFrame(frame);
       trigger.kill();
-      tween.kill();
     };
-  }, [shortViewport, reducedMotion, spatial, stops]);
+  }, [shortViewport, reducedMotion, spatial, stops, selectStop]);
 
   useEffect(() => {
     const fine = window.matchMedia(finePointer);
     const point = (event: PointerEvent) => {
       if (!fine.matches || event.pointerType !== "mouse" || tour.current.modal)
         return;
-      tour.current.pointerX = (event.clientX / window.innerWidth) * 2 - 1;
-      tour.current.pointerY = 1 - (event.clientY / window.innerHeight) * 2;
+      const x = (event.clientX / window.innerWidth) * 2 - 1;
+      const y = 1 - (event.clientY / window.innerHeight) * 2;
+      if (tour.current.pointerX === x && tour.current.pointerY === y) return;
+      tour.current.pointerX = x;
+      tour.current.pointerY = y;
       invalidate.current?.();
     };
     const reset = () => {
+      if (!tour.current.pointerX && !tour.current.pointerY) return;
       tour.current.pointerX = tour.current.pointerY = 0;
       invalidate.current?.();
     };
@@ -321,12 +357,17 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     invalidate.current?.();
   }, []);
 
-  function openInquiry(origin: HTMLElement) {
+  const openInquiry = useCallback((origin: HTMLElement) => {
     tour.current.modal = true;
     originRef.current = origin;
     setInquiry(true);
     invalidate.current?.();
-  }
+  }, []);
+
+  const selectProject = useCallback((stop: MediaStop, index: number) => {
+    setSelectedProjects((previous) => ({ ...previous, [stop.id]: index }));
+    window.history.replaceState(window.history.state, "", "#" + stop.items[index].id);
+  }, []);
 
   function closeDialog() {
     tour.current.modal = false;
@@ -428,6 +469,8 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
             onContextLost={onContextLost}
             onFailure={onFailure}
             onOpen={openVideo}
+            onCameraFrame={onCameraFrame}
+            onActive={spatial ? selectStop : undefined}
             active={active}
             modalOpen={Boolean(video || inquiry)}
             backdrop={shortViewport}
@@ -439,45 +482,16 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
 
       <div className="exhibit-track" ref={trackRef} onFocus={focusStation}>
         {stops.map((stop, i) => (
-          <section
+          <TrackStation
             key={stop.id}
-            id={stop.id}
-            data-stop=""
-            data-kind={stop.kind}
-            data-active={i === active || undefined}
-            aria-labelledby={stop.id + "-title"}
-            tabIndex={-1}
-            className="exhibit-stop"
-          >
-            <div className="station-body">
-              {stop.kind === "arrival" && showreel && (
-                <Arrival item={showreel} onOpen={openVideo} />
-              )}
-              {stop.kind === "media" && stop.items.length > 0 && (
-                <MediaContent
-                  stop={stop}
-                  selected={selectedProjects[stop.id] ?? 0}
-                  onOpen={openVideo}
-                  onSelect={(index) => {
-                    setSelectedProjects((previous) => ({
-                      ...previous,
-                      [stop.id]: index,
-                    }));
-                    window.history.replaceState(
-                      window.history.state,
-                      "",
-                      "#" + stop.items[index].id,
-                    );
-                  }}
-                />
-              )}
-              {stop.kind === "bio" && <Bio />}
-              {stop.kind === "tools" && <Tools />}
-              {stop.kind === "contact" && (
-                <ContactContent onInquiry={openInquiry} />
-              )}
-            </div>
-          </section>
+            stop={stop}
+            active={i === active}
+            selected={selectedProjects[stop.id] ?? 0}
+            showreel={showreel}
+            onOpen={openVideo}
+            onSelect={selectProject}
+            onInquiry={openInquiry}
+          />
         ))}
       </div>
 

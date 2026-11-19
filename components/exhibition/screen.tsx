@@ -1,10 +1,13 @@
 "use client";
 
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Color,
+  Float32BufferAttribute,
   MathUtils,
   Mesh,
+  PlaneGeometry,
   SRGBColorSpace,
   Vector2,
   VideoTexture,
@@ -12,6 +15,7 @@ import {
   type ShaderMaterial,
   type Texture,
 } from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { ExhibitMedia } from "./types";
 import type { Screen } from "./world-layout";
 import { screenFragment, worldVertex } from "./shaders";
@@ -27,18 +31,38 @@ type Preview = {
   clip: HTMLVideoElement;
   texture: VideoTexture;
   frame: number;
+  timer: number;
   ready: boolean;
 };
 
-function release(preview: Preview) {
+function pausePreview(preview: Preview) {
   preview.clip.pause();
   preview.clip.cancelVideoFrameCallback?.(preview.frame);
+  window.clearInterval(preview.timer);
+}
+
+function release(preview: Preview) {
+  pausePreview(preview);
   preview.clip.removeAttribute("src");
   preview.clip.load();
   preview.texture.dispose();
 }
 
-export function MediaScreen({
+function makeTrim(width: number, height: number, reel: boolean) {
+  const border = new PlaneGeometry(width + 0.075, height + 0.075).translate(0, 0, -0.012);
+  const marker = new PlaneGeometry(width * 0.12, 0.026).translate(-width * 0.43, height / 2 + 0.065, 0.007);
+  for (const [geometry, tint] of [[border, reel ? "#87d8ed" : "#46667d"], [marker, "#a0edff"]] as const) {
+    const colour = new Color(tint);
+    const colours = Array.from({ length: 4 }, () => colour.toArray()).flat();
+    geometry.setAttribute("color", new Float32BufferAttribute(colours, 3));
+  }
+  const geometry = mergeGeometries([border, marker]);
+  border.dispose();
+  marker.dispose();
+  return geometry;
+}
+
+export const MediaScreen = memo(function MediaScreen({
   screen,
   poster,
   focused,
@@ -59,6 +83,8 @@ export function MediaScreen({
   const canvas = useThree((state) => state.gl.domElement);
   const [hovered, setHovered] = useState(false);
   const previewActive = hovered && interactive && Boolean(poster) && screen.item.videoAvailable;
+  const trim = useMemo(() => makeTrim(screen.width, screen.height, screen.reel), [screen.width, screen.height, screen.reel]);
+  useEffect(() => () => trim.dispose(), [trim]);
   const aspect = screen.width / screen.height;
   const image = poster?.image as HTMLImageElement | undefined;
   const uniforms = useMemo(
@@ -98,7 +124,7 @@ export function MediaScreen({
       clip.preload = "none";
       const texture = new VideoTexture(clip);
       texture.colorSpace = SRGBColorSpace;
-      const preview: Preview = { clip, texture, frame: 0, ready: false };
+      const preview: Preview = { clip, texture, frame: 0, timer: 0, ready: false };
       clipRef.current = preview;
       const nextFrame = () => {
         if (clipRef.current !== preview || clip.paused) return;
@@ -118,8 +144,16 @@ export function MediaScreen({
             clip.videoHeight,
           );
           preview.ready = true;
-          if (clip.requestVideoFrameCallback)
+          if (clip.requestVideoFrameCallback) {
             preview.frame = clip.requestVideoFrameCallback(nextFrame);
+          } else {
+            let previousTime = clip.currentTime;
+            preview.timer = window.setInterval(() => {
+              if (clip.paused || clip.currentTime === previousTime) return;
+              previousTime = clip.currentTime;
+              invalidate();
+            }, 1000 / 30);
+          }
           invalidate();
         },
         { once: true },
@@ -132,10 +166,7 @@ export function MediaScreen({
     return () => {
       window.clearTimeout(timer);
       const preview = clipRef.current;
-      if (preview) {
-        preview.clip.pause();
-        preview.clip.cancelVideoFrameCallback?.(preview.frame);
-      }
+      if (preview) pausePreview(preview);
       invalidate();
     };
   }, [aspect, dispose, invalidate, previewActive, screen.item.videoSrc]);
@@ -198,10 +229,7 @@ export function MediaScreen({
     if (!previewActive && preview && blend < 0.012) dispose();
     if (
       Math.abs(blend - target) > 0.003 ||
-      Math.abs(focus.current - focusTarget) > 0.003 ||
-      (previewActive &&
-        preview?.ready &&
-        !preview.clip.requestVideoFrameCallback)
+      Math.abs(focus.current - focusTarget) > 0.003
     )
       invalidate();
 
@@ -242,9 +270,8 @@ export function MediaScreen({
           transparent
         />
       </mesh>
-      <mesh position={[0, 0, -0.012]}>
-        <planeGeometry args={[screen.width + 0.075, screen.height + 0.075]} />
-        <meshBasicMaterial color={screen.reel ? "#87d8ed" : "#46667d"} transparent />
+      <mesh geometry={trim}>
+        <meshBasicMaterial vertexColors toneMapped={false} transparent />
       </mesh>
       <mesh
         onPointerOver={enter}
@@ -270,10 +297,6 @@ export function MediaScreen({
           <meshBasicMaterial color="#102030" transparent />
         )}
       </mesh>
-      <mesh position={[-screen.width * 0.43, screen.height / 2 + 0.065, 0.007]}>
-        <planeGeometry args={[screen.width * 0.12, 0.026]} />
-        <meshBasicMaterial color="#a0edff" toneMapped={false} transparent />
-      </mesh>
     </group>
   );
-}
+});

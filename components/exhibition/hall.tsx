@@ -1,6 +1,6 @@
 import { Text } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Suspense, useMemo, useRef, type RefObject } from "react";
+import { memo, Suspense, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import {
   AdditiveBlending,
   BackSide,
@@ -9,6 +9,7 @@ import {
   MathUtils,
   Vector3,
   type Group,
+  type BufferGeometry,
   type ShaderMaterial,
 } from "three";
 import {
@@ -25,6 +26,7 @@ import {
 } from "./shaders";
 import { Spacecraft } from "./spacecraft";
 import { OrbitalDetails } from "./orbital-details";
+import { qualityLevels, type SceneQuality } from "./scene-quality";
 import { WorldBoundary } from "./world-boundary";
 import {
   depth,
@@ -98,18 +100,28 @@ function scatterStars(near: boolean, end: number, count: number) {
 }
 
 function Stars({ near = false, end, count }: { near?: boolean; end: number; count: number }) {
-  const dpr = useThree((state) => state.viewport.dpr);
+  const geometry = useRef<BufferGeometry>(null);
+  const material = useRef<ShaderMaterial>(null);
+  const invalidate = useThree((state) => state.invalidate);
+  const maxCount = near ? qualityLevels[0].nearStars : qualityLevels[0].distantStars;
   const { positions, appearance } = useMemo(
-    () => scatterStars(near, end, count),
-    [near, end, count],
+    () => scatterStars(near, end, maxCount),
+    [near, end, maxCount],
   );
   const uniforms = useMemo(
-    () => ({ uDpr: { value: dpr }, uNearLayer: { value: Number(near) } }),
-    [dpr, near],
+    () => ({ uDpr: { value: 1 }, uNearLayer: { value: Number(near) } }),
+    [near],
   );
+  useLayoutEffect(() => {
+    geometry.current?.setDrawRange(0, count);
+    invalidate();
+  }, [count, invalidate]);
+  useFrame(({ viewport }) => {
+    if (material.current) material.current.uniforms.uDpr.value = viewport.dpr;
+  });
   return (
     <points frustumCulled={near} renderOrder={near ? 1 : -1}>
-      <bufferGeometry>
+      <bufferGeometry ref={geometry}>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute
           attach="attributes-aAppearance"
@@ -117,6 +129,7 @@ function Stars({ near = false, end, count }: { near?: boolean; end: number; coun
         />
       </bufferGeometry>
       <shaderMaterial
+        ref={material}
         uniforms={uniforms}
         vertexShader={starsVertex}
         fragmentShader={starsFragment}
@@ -133,8 +146,8 @@ function Planet({
   radius,
   stop,
   motion,
-  lightweight,
-}: PlanetPlacement & { motion: RefObject<TourMotion>; lightweight: boolean }) {
+  quality,
+}: PlanetPlacement & { motion: RefObject<TourMotion>; quality: SceneQuality }) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const axis = useRef<Group>(null);
@@ -151,8 +164,9 @@ function Planet({
       uSun: { value: new Vector3(...lighting.sun).normalize() },
       uBands: { value: lighting.bands },
       uPresence: { value: 1 },
+      uFineDetail: { value: quality.fineDetail },
     }),
-    [lighting],
+    [lighting, quality.fineDetail],
   );
   const ringUniforms = useMemo(
     () => ({
@@ -185,7 +199,7 @@ function Planet({
       <group ref={axis} rotation={[...lighting.tilt]}>
         <group ref={body} scale={[1, lighting.flattening, 1]}>
           <mesh renderOrder={ringed ? -0.5 : 0}>
-            <sphereGeometry args={[1, lightweight ? 40 : 64, lightweight ? 28 : 48]} />
+            <sphereGeometry args={[1, quality.planetSegments, Math.round(quality.planetSegments * 0.7)]} />
             <shaderMaterial
               ref={surfaceMaterial}
               uniforms={uniforms}
@@ -195,7 +209,7 @@ function Planet({
             />
           </mesh>
           <mesh scale={kind === "contact" ? 1.02 : 1.043}>
-            <sphereGeometry args={[1, lightweight ? 36 : 56, lightweight ? 24 : 40]} />
+            <sphereGeometry args={[1, quality.planetSegments, Math.round(quality.planetSegments * 0.6)]} />
             <shaderMaterial
               ref={atmosphereMaterial}
               uniforms={uniforms}
@@ -210,7 +224,7 @@ function Planet({
         </group>
         {ringed && (
           <mesh rotation-x={Math.PI / 2}>
-            <ringGeometry args={[ringInner, ringOuter, lightweight ? 64 : 96]} />
+            <ringGeometry args={[ringInner, ringOuter, quality.fineDetail ? 96 : 64]} />
             <shaderMaterial
               ref={ringMaterial}
               uniforms={ringUniforms}
@@ -227,19 +241,17 @@ function Planet({
   );
 }
 
-export function Hall({
+export const Hall = memo(function Hall({
   stops,
   screens,
   motion,
-  active,
-  lightweight,
+  quality,
   reducedMotion,
 }: {
   stops: Stop[];
   screens: Screen[];
   motion: RefObject<TourMotion>;
-  active: number;
-  lightweight: boolean;
+  quality: SceneQuality;
   reducedMotion: boolean;
 }) {
   const { width, height } = useThree((state) => state.size);
@@ -264,18 +276,18 @@ export function Hall({
       <fogExp2 attach="fog" args={[spaceBackground, 0.024]} />
       <ambientLight intensity={1.3} color="#8ca2c2" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
-      <Stars end={endDepth} count={lightweight ? 3600 : 4850} />
-      <Stars end={endDepth} count={lightweight ? 820 : 1240} near />
+      <Stars end={endDepth} count={quality.distantStars} />
+      <Stars end={endDepth} count={quality.nearStars} near />
       {planets.map((planet) => (
-        <Planet key={planet.kind} {...planet} motion={motion} lightweight={lightweight} />
+        <Planet key={planet.kind} {...planet} motion={motion} quality={quality} />
       ))}
-      <Spacecraft {...spacecraft} nearby={!reducedMotion && active < 2} motion={motion} />
+      <Spacecraft {...spacecraft} motion={motion} reducedMotion={reducedMotion} />
       {poses[bioIndex] && poses[toolsIndex] && (
         <OrbitalDetails
           astronaut={layoutOrbitalDetail(poses[bioIndex], aspect, height, "astronaut")}
           satellite={layoutOrbitalDetail(poses[toolsIndex], aspect, height, "satellite")}
-          nearby={!reducedMotion && (active === bioIndex || active === toolsIndex)}
           motion={motion}
+          reducedMotion={reducedMotion}
         />
       )}
       <WorldBoundary>
@@ -304,4 +316,4 @@ export function Hall({
       </WorldBoundary>
     </>
   );
-}
+});

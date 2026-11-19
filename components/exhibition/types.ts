@@ -25,8 +25,11 @@ export type Stop =
   | (Station & { kind: "arrival" | "bio" | "tools" | "contact" });
 
 export type TourMotion = {
+  target: number;
   progress: number;
   active: number;
+  moving: boolean;
+  snap: number;
   pointerX: number;
   pointerY: number;
   modal: boolean;

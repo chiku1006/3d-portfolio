@@ -101,6 +101,7 @@ export const planetFragment = /* glsl */ `
   uniform vec3 uSun;
   uniform float uBands;
   uniform float uPresence;
+  uniform bool uFineDetail;
   varying vec3 vSurface;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -130,7 +131,7 @@ export const planetFragment = /* glsl */ `
     float day = smoothstep(-0.27, 0.86, sunlight);
     float current = noise(p * 4.8 + 9.2);
     float detail = noise(p * vec3(12.0, 19.0, 12.0) + current * 3.8);
-    float fine = noise(p * 49.0 + detail * 1.3);
+    float fine = uFineDetail ? noise(p * 49.0 + detail * 1.3) : 0.5;
     float veil = smoothstep(0.31, 0.82, current * 0.47 + detail * 0.39 + fine * 0.14);
     float streak = 0.5 + 0.5 * sin(p.y * 27.0 + current * 5.2 + detail);
     float pattern = mix(veil, veil * 0.42 + streak * 0.58, uBands);
