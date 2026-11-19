@@ -58,7 +58,7 @@ export function MediaScreen({
   const invalidate = useThree((state) => state.invalidate);
   const canvas = useThree((state) => state.gl.domElement);
   const [hovered, setHovered] = useState(false);
-  const previewActive = hovered && interactive && screen.item.videoAvailable;
+  const previewActive = hovered && interactive && Boolean(poster) && screen.item.videoAvailable;
   const aspect = screen.width / screen.height;
   const image = poster?.image as HTMLImageElement | undefined;
   const uniforms = useMemo(

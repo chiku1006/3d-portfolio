@@ -1,19 +1,25 @@
 "use client";
 
-import { PerspectiveCamera, useTexture } from "@react-three/drei";
+import { PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
-  Component,
-  Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type ComponentProps,
-  type ReactNode,
   type RefObject,
 } from "react";
-import { MathUtils, SRGBColorSpace, Vector3, type Texture } from "three";
+import {
+  MathUtils,
+  SRGBColorSpace,
+  TextureLoader,
+  Vector3,
+  WebGLRenderer,
+  type Texture,
+} from "three";
 import { Hall } from "./hall";
 import { MediaScreen } from "./screen";
 import type { ExhibitMedia, Stop, TourMotion } from "./types";
@@ -30,40 +36,23 @@ type WorldProps = {
   motion: RefObject<TourMotion>;
   frameRequestRef: RefObject<(() => void) | null>;
   onReady: () => void;
-  onFailure: () => void;
+  onContextLost: () => void;
+  onFailure: (error: Error) => void;
   onOpen: (item: ExhibitMedia) => void;
   modalOpen: boolean;
   active: number;
+  forceLightweight: boolean;
 };
-
-class CanvasBoundary extends Component<
-  { onFailure: () => void; children: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  componentDidCatch() {
-    this.props.onFailure();
-  }
-  render() {
-    return this.state.failed ? null : this.props.children;
-  }
-}
 
 function CameraPath({
   stops,
   screens,
   motion,
-  frameRequestRef,
-  onFailure,
-}: Pick<WorldProps, "stops" | "motion" | "frameRequestRef" | "onFailure"> & {
+}: Pick<WorldProps, "stops" | "motion"> & {
   screens: Screen[];
 }) {
   const size = useThree((state) => state.size);
   const invalidate = useThree((state) => state.invalidate);
-  const canvas = useThree((state) => state.gl.domElement);
   const poses = useMemo(
     () => layoutCamera(stops, screens, size.width / Math.max(size.height, 1), size.height),
     [stops, screens, size.width, size.height],
@@ -87,24 +76,6 @@ function CameraPath({
   const aim = useMemo(() => new Vector3(), []);
   const position = useMemo(() => new Vector3(), []);
   const first = useRef(true);
-
-  useEffect(() => {
-    const lost = (event: Event) => {
-      event.preventDefault();
-      onFailure();
-    };
-    const request = () => {
-      if (!document.hidden) invalidate();
-    };
-    frameRequestRef.current = request;
-    canvas.addEventListener("webglcontextlost", lost);
-    document.addEventListener("visibilitychange", request);
-    return () => {
-      frameRequestRef.current = null;
-      canvas.removeEventListener("webglcontextlost", lost);
-      document.removeEventListener("visibilitychange", request);
-    };
-  }, [canvas, frameRequestRef, invalidate, onFailure]);
 
   useFrame(({ camera }, delta) => {
     if (document.hidden || motion.current.modal) return;
@@ -166,20 +137,104 @@ function CameraPath({
   );
 }
 
-function configureTexture(texture: Texture, anisotropy: number) {
-  texture.colorSpace = SRGBColorSpace;
-  texture.anisotropy = anisotropy;
-  texture.needsUpdate = true;
+function SceneFrame({ frameRequestRef, onReady, onContextLost, onFailure }: Pick<
+  WorldProps, "frameRequestRef" | "onReady" | "onContextLost" | "onFailure"
+>) {
+  const gl = useThree((state) => state.gl);
+  const invalidate = useThree((state) => state.invalidate);
+  const context = gl.getContext();
+  const canvas = gl.domElement;
+  const lost = useRef(false);
+  const rendered = useRef(false);
+  const failed = useRef(false);
+  const suspend = useCallback(() => {
+    if (lost.current || failed.current) return;
+    lost.current = true;
+    rendered.current = false;
+    onContextLost();
+  }, [onContextLost]);
+
+  useLayoutEffect(() => {
+    const request = () => {
+      if (!document.hidden) invalidate();
+    };
+    const onLost = (event: Event) => {
+      event.preventDefault();
+      suspend();
+    };
+    const onRestored = () => {
+      lost.current = false;
+      request();
+    };
+    frameRequestRef.current = request;
+    canvas.addEventListener("webglcontextlost", onLost);
+    canvas.addEventListener("webglcontextrestored", onRestored);
+    document.addEventListener("visibilitychange", request);
+    if (context.isContextLost()) suspend();
+    return () => {
+      if (frameRequestRef.current === request) frameRequestRef.current = null;
+      canvas.removeEventListener("webglcontextlost", onLost);
+      canvas.removeEventListener("webglcontextrestored", onRestored);
+      document.removeEventListener("visibilitychange", request);
+    };
+  }, [canvas, context, frameRequestRef, invalidate, suspend]);
+
+  // Render after the scene's frame callbacks so the 2D view stays in place
+  // until Three has drawn a frame on the actual canvas.
+  useFrame(({ scene, camera }) => {
+    if (document.hidden || failed.current || lost.current) return;
+    if (context.isContextLost()) {
+      suspend();
+      return;
+    }
+    try {
+      gl.render(scene, camera);
+    } catch (error) {
+      if (context.isContextLost()) {
+        suspend();
+      } else {
+        failed.current = true;
+        onFailure(new Error("The 3D scene failed to render.", { cause: error }));
+      }
+      return;
+    }
+    if (rendered.current) return;
+    if (context.isContextLost()) {
+      suspend();
+      return;
+    }
+    rendered.current = true;
+    onReady();
+  }, 1);
+
+  return null;
 }
 
 function LoadedMediaScreen(props: Omit<ComponentProps<typeof MediaScreen>, "poster">) {
-  const texture = useTexture(props.screen.item.posterSrc);
-  const limit = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
-  useLayoutEffect(() => {
-    configureTexture(texture, Math.min(4, limit));
-    return () => texture.dispose();
-  }, [texture, limit]);
-  return <MediaScreen {...props} poster={texture} />;
+  const { posterSrc } = props.screen.item;
+  const [poster, setPoster] = useState<Texture>();
+  const anisotropy = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
+  useEffect(() => {
+    let mounted = true;
+    const texture = new TextureLoader().load(
+      posterSrc,
+      (loaded) => {
+        if (!mounted) return;
+        loaded.colorSpace = SRGBColorSpace;
+        loaded.anisotropy = Math.min(4, anisotropy);
+        setPoster(loaded);
+      },
+      undefined,
+      (error) => {
+        if (mounted) console.warn(`[Portfolio 3D] Could not load poster ${posterSrc}.`, error);
+      },
+    );
+    return () => {
+      mounted = false;
+      texture.dispose();
+    };
+  }, [anisotropy, posterSrc]);
+  return <MediaScreen {...props} poster={poster} />;
 }
 
 function ExhibitionWorld({
@@ -190,38 +245,20 @@ function ExhibitionWorld({
   active,
   modalOpen,
   onOpen,
-  onReady,
-}: Pick<WorldProps, "stops" | "selectedProjects" | "motion" | "active" | "modalOpen" | "onReady" | "onOpen"> & {
+  lightweight,
+}: Pick<WorldProps, "stops" | "selectedProjects" | "motion" | "active" | "modalOpen" | "onOpen"> & {
   screens: Screen[];
+  lightweight: boolean;
 }) {
-  const urls = useMemo(
-    () => [
-      ...screens
-        .filter(({ item }) => item.posterAvailable)
-        .map(({ item }) => item.posterSrc),
-    ],
-    [screens],
-  );
-  const textures = useTexture(urls);
-  const maps = useMemo(
-    () =>
-      Object.fromEntries(urls.map((url, i) => [url, textures[i]])) as Record<
-        string,
-        Texture
-      >,
-    [urls, textures],
-  );
-  const invalidate = useThree((state) => state.invalidate);
-  const limit = useThree((state) => state.gl.capabilities.getMaxAnisotropy());
-  useLayoutEffect(() => {
-    textures.forEach((texture) => configureTexture(texture, Math.min(4, limit)));
-    invalidate();
-    return () => textures.forEach((texture) => texture.dispose());
-  }, [textures, invalidate, limit]);
-  useEffect(onReady, [onReady]);
   return (
     <>
-      <Hall stops={stops} screens={screens} motion={motion} active={active} />
+      <Hall
+        stops={stops}
+        screens={screens}
+        motion={motion}
+        active={active}
+        lightweight={lightweight}
+      />
       {screens.map((screen) => {
         const stop = stops[screen.index];
         const item = stop.kind === "media"
@@ -234,18 +271,9 @@ function ExhibitionWorld({
           interactive: !modalOpen && focused,
           onOpen,
         };
-        const poster = maps[item.posterSrc];
-        if (poster || !item.posterAvailable) {
-          return <MediaScreen key={item.id} {...props} poster={poster} />;
-        }
-        return (
-          <Suspense
-            key={item.id}
-            fallback={<MediaScreen {...props} poster={undefined} interactive={false} />}
-          >
-            <LoadedMediaScreen {...props} />
-          </Suspense>
-        );
+        return item.posterAvailable
+          ? <LoadedMediaScreen key={`${item.id}:${item.posterSrc}`} {...props} />
+          : <MediaScreen key={item.id} {...props} poster={undefined} />;
       })}
     </>
   );
@@ -253,36 +281,45 @@ function ExhibitionWorld({
 
 export default function WorldCanvas(props: WorldProps) {
   const screens = useMemo(() => layoutScreens(props.stops), [props.stops]);
+  const [touchPrimary] = useState(() => window.matchMedia("(pointer: coarse)").matches);
+  const lightweight = touchPrimary || props.forceLightweight;
+  const createRenderer = useCallback(({ canvas }: { canvas: EventTarget }) => {
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      throw new Error("The 3D scene could not attach to its canvas.");
+    }
+    const attributes: WebGLContextAttributes = {
+      alpha: false,
+      antialias: !lightweight,
+      powerPreference: "default",
+      failIfMajorPerformanceCaveat: false,
+    };
+    let context = canvas.getContext("webgl2", attributes);
+    if (!context && attributes.antialias) {
+      attributes.antialias = false;
+      context = canvas.getContext("webgl2", attributes);
+    }
+    if (!context) throw new Error("This browser could not create a WebGL 2 context.");
+    const renderer = new WebGLRenderer({ canvas, context, ...attributes });
+    renderer.debug.onShaderError = (context, program) => {
+      if (!context.isContextLost()) {
+        throw new Error(`A scene shader failed to link. ${context.getProgramInfoLog(program) ?? ""}`);
+      }
+    };
+    return renderer;
+  }, [lightweight]);
+
   return (
     <div className="exhibit-world" aria-hidden="true">
-      <CanvasBoundary onFailure={props.onFailure}>
-        <Canvas
-          dpr={[1, 1.5]}
-          frameloop="demand"
-          flat
-          gl={{ alpha: false, antialias: true, powerPreference: "default" }}
-        >
-          <CameraPath
-            stops={props.stops}
-            screens={screens}
-            motion={props.motion}
-            frameRequestRef={props.frameRequestRef}
-            onFailure={props.onFailure}
-          />
-          <Suspense fallback={null}>
-            <ExhibitionWorld
-              screens={screens}
-              stops={props.stops}
-              selectedProjects={props.selectedProjects}
-              motion={props.motion}
-              active={props.active}
-              modalOpen={props.modalOpen}
-              onOpen={props.onOpen}
-              onReady={props.onReady}
-            />
-          </Suspense>
-        </Canvas>
-      </CanvasBoundary>
+      <Canvas
+        dpr={[1, props.forceLightweight ? 1 : lightweight ? 1.15 : 1.5]}
+        frameloop="demand"
+        flat
+        gl={createRenderer}
+      >
+        <CameraPath stops={props.stops} screens={screens} motion={props.motion} />
+        <ExhibitionWorld {...props} screens={screens} lightweight={lightweight} />
+        <SceneFrame {...props} />
+      </Canvas>
     </div>
   );
 }

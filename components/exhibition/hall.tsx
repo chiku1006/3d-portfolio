@@ -1,6 +1,6 @@
 import { Text } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef, type RefObject } from "react";
+import { Suspense, useMemo, useRef, type RefObject } from "react";
 import {
   AdditiveBlending,
   BackSide,
@@ -25,6 +25,7 @@ import {
 } from "./shaders";
 import { Spacecraft } from "./spacecraft";
 import { OrbitalDetails } from "./orbital-details";
+import { WorldBoundary } from "./world-boundary";
 import {
   depth,
   layoutCamera,
@@ -66,8 +67,7 @@ const planetLighting = {
   },
 } as const;
 
-function scatterStars(near: boolean, end: number) {
-  const count = near ? 1240 : 4850;
+function scatterStars(near: boolean, end: number, count: number) {
   const positions = new Float32Array(count * 3);
   const appearance = new Float32Array(count * 2);
   let seed = near ? 171 : 41;
@@ -97,11 +97,11 @@ function scatterStars(near: boolean, end: number) {
   return { positions, appearance };
 }
 
-function Stars({ near = false, end }: { near?: boolean; end: number }) {
+function Stars({ near = false, end, count }: { near?: boolean; end: number; count: number }) {
   const dpr = useThree((state) => state.viewport.dpr);
   const { positions, appearance } = useMemo(
-    () => scatterStars(near, end),
-    [near, end],
+    () => scatterStars(near, end, count),
+    [near, end, count],
   );
   const uniforms = useMemo(
     () => ({ uDpr: { value: dpr }, uNearLayer: { value: Number(near) } }),
@@ -133,7 +133,8 @@ function Planet({
   radius,
   stop,
   motion,
-}: PlanetPlacement & { motion: RefObject<TourMotion> }) {
+  lightweight,
+}: PlanetPlacement & { motion: RefObject<TourMotion>; lightweight: boolean }) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const axis = useRef<Group>(null);
@@ -184,7 +185,7 @@ function Planet({
       <group ref={axis} rotation={[...lighting.tilt]}>
         <group ref={body} scale={[1, lighting.flattening, 1]}>
           <mesh renderOrder={ringed ? -0.5 : 0}>
-            <sphereGeometry args={[1, 64, 48]} />
+            <sphereGeometry args={[1, lightweight ? 40 : 64, lightweight ? 28 : 48]} />
             <shaderMaterial
               ref={surfaceMaterial}
               uniforms={uniforms}
@@ -194,7 +195,7 @@ function Planet({
             />
           </mesh>
           <mesh scale={kind === "contact" ? 1.02 : 1.043}>
-            <sphereGeometry args={[1, 56, 40]} />
+            <sphereGeometry args={[1, lightweight ? 36 : 56, lightweight ? 24 : 40]} />
             <shaderMaterial
               ref={atmosphereMaterial}
               uniforms={uniforms}
@@ -209,7 +210,7 @@ function Planet({
         </group>
         {ringed && (
           <mesh rotation-x={Math.PI / 2}>
-            <ringGeometry args={[ringInner, ringOuter, 96]} />
+            <ringGeometry args={[ringInner, ringOuter, lightweight ? 64 : 96]} />
             <shaderMaterial
               ref={ringMaterial}
               uniforms={ringUniforms}
@@ -231,11 +232,13 @@ export function Hall({
   screens,
   motion,
   active,
+  lightweight,
 }: {
   stops: Stop[];
   screens: Screen[];
   motion: RefObject<TourMotion>;
   active: number;
+  lightweight: boolean;
 }) {
   const { width, height } = useThree((state) => state.size);
   const aspect = width / Math.max(height, 1);
@@ -259,10 +262,10 @@ export function Hall({
       <fogExp2 attach="fog" args={[spaceBackground, 0.024]} />
       <ambientLight intensity={1.3} color="#8ca2c2" />
       <directionalLight intensity={1.8} color="#a3d5ff" position={[0, 9, 5]} />
-      <Stars end={endDepth} />
-      <Stars end={endDepth} near />
+      <Stars end={endDepth} count={lightweight ? 3600 : 4850} />
+      <Stars end={endDepth} count={lightweight ? 820 : 1240} near />
       {planets.map((planet) => (
-        <Planet key={planet.kind} {...planet} motion={motion} />
+        <Planet key={planet.kind} {...planet} motion={motion} lightweight={lightweight} />
       ))}
       <Spacecraft {...spacecraft} nearby={active < 2} motion={motion} />
       {poses[bioIndex] && poses[toolsIndex] && (
@@ -273,26 +276,30 @@ export function Hall({
           motion={motion}
         />
       )}
-      <Text
-        font="/fonts/InstrumentSerif-Italic.ttf"
-        fontSize={9.8}
-        color="#22364f"
-        position={[-1, 0.45, bioDepth - 4]}
-        anchorX="center"
-        fillOpacity={0.32}
-      >
-        SM
-      </Text>
-      <Text
-        font="/fonts/InstrumentSerif-Italic.ttf"
-        fontSize={5.2}
-        color="#3e617e"
-        position={[2, 1.55, toolsDepth - 5]}
-        anchorX="center"
-        fillOpacity={0.28}
-      >
-        Chiku
-      </Text>
+      <WorldBoundary>
+        <Suspense fallback={null}>
+          <Text
+            font="/fonts/InstrumentSerif-Italic.ttf"
+            fontSize={9.8}
+            color="#22364f"
+            position={[-1, 0.45, bioDepth - 4]}
+            anchorX="center"
+            fillOpacity={0.32}
+          >
+            SM
+          </Text>
+          <Text
+            font="/fonts/InstrumentSerif-Italic.ttf"
+            fontSize={5.2}
+            color="#3e617e"
+            position={[2, 1.55, toolsDepth - 5]}
+            anchorX="center"
+            fillOpacity={0.28}
+          >
+            Chiku
+          </Text>
+        </Suspense>
+      </WorldBoundary>
     </>
   );
 }

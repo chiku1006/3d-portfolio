@@ -17,6 +17,7 @@ import { HireForm } from "@/components/hire-form";
 import { contact } from "@/src/data/site";
 import { Arrival, Bio, ContactContent, MediaContent, Tools } from "./content";
 import { Opening } from "./opening";
+import { WorldBoundary } from "./world-boundary";
 import {
   chapters,
   type ExhibitMedia,
@@ -29,6 +30,7 @@ const World = dynamic(() => import("./world-canvas"), { ssr: false });
 const spatialPreference =
   "(prefers-reduced-motion: no-preference) and (min-height: 500px)";
 const finePointer = "(hover: hover) and (pointer: fine)";
+type WorldStatus = "starting" | "ready" | "recovering" | "failed" | "flat";
 const links = [
   { label: "Home", id: "home", chapter: 0 },
   { label: "My Work", id: "work", chapter: 2 },
@@ -90,34 +92,80 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
     {},
   );
   const [permitted, setPermitted] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [flat, setFlat] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [worldStatus, setWorldStatus] = useState<WorldStatus>("starting");
+  const [useLightweightRetry, setUseLightweightRetry] = useState(false);
   const [video, setVideo] = useState<ExhibitMedia | null>(null);
   const [inquiry, setInquiry] = useState(false);
-  const showWorld = permitted && !flat && !failed;
-  const spatial = showWorld && ready;
+  const hasRendered = useRef(false);
+  const showWorld = permitted && worldStatus !== "flat" && worldStatus !== "failed";
+  const spatial = showWorld && worldStatus === "ready";
 
-  const onReady = useCallback(() => setReady(true), []);
-  const onFailure = useCallback(() => {
+  const rememberStop = useCallback(() => {
     restoreStop.current = stops[tour.current.active]?.id ?? null;
-    setFailed(true);
   }, [stops]);
+  const onReady = useCallback(() => {
+    if (!restoreStop.current && (hasRendered.current || tour.current.active > 0)) {
+      rememberStop();
+    }
+    hasRendered.current = true;
+    setWorldStatus("ready");
+  }, [rememberStop]);
+  const onContextLost = useCallback(() => {
+    if (hasRendered.current) rememberStop();
+    setWorldStatus("recovering");
+  }, [rememberStop]);
+  const onFailure = useCallback((error: Error) => {
+    if (hasRendered.current) rememberStop();
+    console.warn("[Portfolio 3D] Using the 2D view.", error);
+    setWorldStatus("failed");
+  }, [rememberStop]);
 
   useEffect(() => {
     const preference = window.matchMedia(spatialPreference);
-    const update = () => setPermitted(preference.matches);
+    const update = () => {
+      if (hasRendered.current) rememberStop();
+      if (!preference.matches) {
+        setWorldStatus((current) =>
+          current === "ready" || current === "recovering" ? "starting" : current,
+        );
+      }
+      setPermitted(preference.matches);
+    };
     const frame = requestAnimationFrame(update);
     preference.addEventListener("change", update);
     return () => {
       cancelAnimationFrame(frame);
       preference.removeEventListener("change", update);
     };
-  }, []);
+  }, [rememberStop]);
+
+  useEffect(() => {
+    if (!showWorld || worldStatus === "ready") return;
+    const recovering = worldStatus === "recovering";
+    const errorMessage = recovering
+      ? "The WebGL 2 context did not recover."
+      : "The 3D scene did not render its first frame.";
+    let timer: number;
+    const waitWhileVisible = () => {
+      window.clearTimeout(timer);
+      if (document.hidden) return;
+      timer = window.setTimeout(
+        () => onFailure(new Error(errorMessage)),
+        recovering ? 6_000 : 15_000,
+      );
+    };
+    waitWhileVisible();
+    document.addEventListener("visibilitychange", waitWhileVisible);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", waitWhileVisible);
+    };
+  }, [onFailure, showWorld, worldStatus]);
 
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track) return;
+    const preference = window.matchMedia(spatialPreference);
     gsap.registerPlugin(ScrollTrigger);
     const nodes = Array.from(
       track.querySelectorAll<HTMLElement>("[data-stop]"),
@@ -131,6 +179,8 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       );
     }
     function update(y: number) {
+      // A rotating device can resize the old layout before React switches modes.
+      if (preference.matches !== permitted) return;
       let index = centers.findLastIndex((stop) => stop <= y + 1);
       index = Math.max(0, index);
       const next = centers[index + 1];
@@ -200,11 +250,14 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       const id =
         restoreStop.current ??
         resolveProjectLink(fragment) ??
-        (spatial ? fragment : null);
+        fragment;
       restoreStop.current = null;
       if (id)
         document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
       ScrollTrigger.refresh();
+      trigger.update();
+      const scrub = trigger.getTween();
+      if (scrub) scrub.progress(1);
       update(window.scrollY);
     });
     return () => {
@@ -213,7 +266,7 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
       trigger.kill();
       tween.kill();
     };
-  }, [spatial, stops]);
+  }, [permitted, spatial, stops]);
 
   useEffect(() => {
     const fine = window.matchMedia(finePointer);
@@ -326,33 +379,38 @@ export function Exhibition({ stops }: { stops: Stop[] }) {
             </a>
           ))}
         </nav>
-        {permitted && !failed && (
+        {permitted && (
           <button
             type="button"
             className="exhibit-mode"
+            title={worldStatus === "failed" ? "Retry the 3D view with lighter graphics" : undefined}
             onClick={() => {
-              restoreStop.current = current.id;
-              setReady(false);
-              setFlat(!flat);
+              rememberStop();
+              if (worldStatus === "failed") setUseLightweightRetry(true);
+              setWorldStatus(showWorld ? "flat" : "starting");
             }}
           >
-            {flat ? "3D view" : "2D view"}
+            {spatial ? "2D view" : showWorld ? "Cancel 3D" : "3D view"}
           </button>
         )}
       </header>
 
       {showWorld && (
-        <World
-          stops={stops}
-          selectedProjects={selectedProjects}
-          motion={tour}
-          frameRequestRef={invalidate}
-          onReady={onReady}
-          onFailure={onFailure}
-          onOpen={openVideo}
-          active={active}
-          modalOpen={Boolean(video || inquiry)}
-        />
+        <WorldBoundary onError={onFailure}>
+          <World
+            stops={stops}
+            selectedProjects={selectedProjects}
+            motion={tour}
+            frameRequestRef={invalidate}
+            onReady={onReady}
+            onContextLost={onContextLost}
+            onFailure={onFailure}
+            onOpen={openVideo}
+            active={active}
+            modalOpen={Boolean(video || inquiry)}
+            forceLightweight={useLightweightRetry}
+          />
+        </WorldBoundary>
       )}
 
       <div className="exhibit-track" ref={trackRef} onFocus={focusStation}>
